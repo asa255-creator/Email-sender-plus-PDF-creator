@@ -46,7 +46,7 @@ function validatePeopleSheet(ss) {
 
   // Set headers only if they're missing
   if (!headers[0]) sheet.getRange(1, 1).setValue('Name');
-  if (!headers[1]) sheet.getRange(1, 2).setValue('Pack Names');
+  if (!headers[1]) sheet.getRange(1, 2).setValue('PAC Names');
   if (!headers[2]) sheet.getRange(1, 3).setValue('Email');
   if (!headers[3]) sheet.getRange(1, 4).setValue('Phone');
   if (!headers[4]) sheet.getRange(1, 5).setValue('Address');
@@ -56,7 +56,7 @@ function validatePeopleSheet(ss) {
 
   // Resize columns for better readability
   sheet.setColumnWidth(1, 150); // Name
-  sheet.setColumnWidth(2, 150); // Pack Names
+  sheet.setColumnWidth(2, 150); // PAC Names
   sheet.setColumnWidth(3, 200); // Email
   sheet.setColumnWidth(4, 120); // Phone
   sheet.setColumnWidth(5, 250); // Address

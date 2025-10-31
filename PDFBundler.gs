@@ -7,7 +7,7 @@
 const BUNDLE_SHEET_NAME = 'People';
 const BUNDLE_DETAILS_SHEET = 'email details';
 const BUNDLE_NAME_COL = 1;      // A: Name
-const BUNDLE_PACK_COL = 2;      // B: Pack Names
+const BUNDLE_PAC_COL = 2;       // B: PAC Names
 const BUNDLE_EMAIL_COL = 3;     // C: Email (not used for PDF bundle)
 const BUNDLE_PHONE_COL = 4;     // D: Phone (not used for PDF bundle)
 const BUNDLE_ADDRESS_COL = 5;   // E: Address
@@ -60,18 +60,18 @@ function generatePDFBundleWithLabels() {
     return;
   }
 
-  const width = Math.max(BUNDLE_NAME_COL, BUNDLE_PACK_COL, BUNDLE_ADDRESS_COL);
+  const width = Math.max(BUNDLE_NAME_COL, BUNDLE_PAC_COL, BUNDLE_ADDRESS_COL);
   const values = listSh.getRange(2, 1, lastRow - 1, width).getDisplayValues();
 
   // Filter valid rows (must have name and address)
   const people = [];
   values.forEach(row => {
     const name = String(row[BUNDLE_NAME_COL - 1] || '').trim();
-    const packNames = String(row[BUNDLE_PACK_COL - 1] || '').trim();
+    const pacNames = String(row[BUNDLE_PAC_COL - 1] || '').trim();
     const address = String(row[BUNDLE_ADDRESS_COL - 1] || '').trim();
 
     if (name && address) {
-      people.push({ name, packNames, address });
+      people.push({ name, pacNames, address });
     }
   });
 
@@ -175,8 +175,8 @@ function generateLabelsDocument(people, folderName) {
  */
 function formatLabelText(person) {
   let text = person.name;
-  if (person.packNames) {
-    text += '\n' + person.packNames;
+  if (person.pacNames) {
+    text += '\n' + person.pacNames;
   }
   text += '\n' + person.address;
   return text;
@@ -222,7 +222,7 @@ function showLabelPrintingHelp() {
     '4. Print normally\n\n' +
     'Each label shows:\n' +
     '• Name\n' +
-    '• Pack Names (if provided)\n' +
+    '• PAC Names (if provided)\n' +
     '• Address',
     ui.ButtonSet.OK
   );
