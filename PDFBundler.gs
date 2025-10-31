@@ -41,9 +41,25 @@ function generatePDFBundleWithLabels() {
     return;
   }
 
-  const templateFile = fileFromDriveLink(attachmentRef);
-  if (!templateFile) {
-    ui.alert('Error: Could not open the PDF file from C2. Check that the link or ID is correct and you have access.');
+  // Debug: Extract and show the file ID
+  const fileId = extractDriveId(attachmentRef);
+  if (!fileId) {
+    ui.alert('Error: Could not extract file ID from C2.\n\nValue in C2: ' + attachmentRef + '\n\nPlease use one of these formats:\n' +
+             '• Full Drive URL: https://drive.google.com/file/d/FILE_ID/view\n' +
+             '• Just the file ID: 1a2b3c4d5e6f7g8h9i0j');
+    return;
+  }
+
+  let templateFile;
+  try {
+    templateFile = DriveApp.getFileById(fileId);
+  } catch (e) {
+    ui.alert('Error: Cannot access file with ID: ' + fileId + '\n\n' +
+             'Error message: ' + e.message + '\n\n' +
+             'Make sure:\n' +
+             '1. The file exists in your Drive\n' +
+             '2. You have access to the file\n' +
+             '3. The file ID is correct');
     return;
   }
 
