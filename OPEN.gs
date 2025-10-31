@@ -16,6 +16,8 @@ function onOpen() {
     .addSeparator()
     .addItem('Fill Emails from VCF File', 'fillEmailsFromVCF')
     .addItem('Fill Emails from Google Contacts', 'fillEmailsFromGoogleContacts')
+    .addSeparator()
+    .addItem('Generate PDF Bundle & Labels', 'generatePDFBundleWithLabels')
     .addToUi();
 }
 
@@ -39,16 +41,25 @@ function validatePeopleSheet(ss) {
     sheet = ss.insertSheet(SHEET_NAME);
   }
 
-  // Check if headers exist in row 1
-  const headers = sheet.getRange(1, 1, 1, 4).getValues()[0];
+  // Check if headers exist in row 1 (columns A-E)
+  const headers = sheet.getRange(1, 1, 1, 5).getValues()[0];
 
   // Set headers only if they're missing
   if (!headers[0]) sheet.getRange(1, 1).setValue('Name');
+  if (!headers[1]) sheet.getRange(1, 2).setValue('Pack Names');
   if (!headers[2]) sheet.getRange(1, 3).setValue('Email');
   if (!headers[3]) sheet.getRange(1, 4).setValue('Phone');
+  if (!headers[4]) sheet.getRange(1, 5).setValue('Address');
 
   // Format header row
-  sheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f3f3f3');
+  sheet.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#f3f3f3');
+
+  // Resize columns for better readability
+  sheet.setColumnWidth(1, 150); // Name
+  sheet.setColumnWidth(2, 150); // Pack Names
+  sheet.setColumnWidth(3, 200); // Email
+  sheet.setColumnWidth(4, 120); // Phone
+  sheet.setColumnWidth(5, 250); // Address
 }
 
 function validateEmailDetailsSheet(ss) {
