@@ -136,22 +136,18 @@ function generatePDFBundleWithLabels() {
     }
   });
 
-  // Generate labels document
-  const labelsDoc = generateLabelsDocument(people, folderName);
-
-  // Move labels doc to the same folder
-  if (labelsDoc) {
-    const labelsFile = DriveApp.getFileById(labelsDoc.getId());
-    labelsFile.moveTo(folder);
-  }
+  // Generate labels PDF
+  const labelsPdfCreated = generateLabelsPDF(people, folderName, folder);
 
   // Show completion message
   ui.alert(
     'PDF Bundle Created!\n\n' +
     'PDFs generated: ' + generatedCount + '\n' +
-    'Labels created: ' + people.length + '\n\n' +
+    'Labels document: ' + (labelsPdfCreated ? 'Created (PDF)' : 'Failed') + '\n' +
+    'Total labels: ' + people.length + '\n\n' +
     'Folder: ' + folderName + '\n' +
-    'Location: ' + folder.getUrl()
+    'Location: ' + folder.getUrl() + '\n\n' +
+    'Print the "Mailing Labels.pdf" file on Avery 5160 label sheets.'
   );
 }
 
@@ -237,17 +233,42 @@ function sanitizeFileName(name) {
 /** ========================== LABELS GENERATION =============== **/
 
 /**
+ * Generates labels PDF and saves to folder
+ */
+function generateLabelsPDF(people, folderName, folder) {
+  try {
+    // Generate the labels document
+    const labelsDoc = generateLabelsDocument(people, folderName);
+
+    // Get the file and export as PDF
+    const labelsFile = DriveApp.getFileById(labelsDoc.getId());
+    const labelsPdfBlob = labelsFile.getAs('application/pdf');
+
+    // Save PDF to folder
+    folder.createFile(labelsPdfBlob.setName('Mailing Labels.pdf'));
+
+    // Delete the temporary Google Doc
+    labelsFile.setTrashed(true);
+
+    return true;
+  } catch (e) {
+    Logger.log('Error generating labels PDF: ' + e.message);
+    return false;
+  }
+}
+
+/**
  * Generates a Google Doc with mailing labels in Avery 5160 format
  */
 function generateLabelsDocument(people, folderName) {
-  const doc = DocumentApp.create(`Mailing Labels - ${folderName}`);
+  const doc = DocumentApp.create(`Temp Labels - ${folderName}`);
   const body = doc.getBody();
 
-  // Set up document
+  // Set up document margins for Avery 5160 (standard letter size)
   body.setMarginTop(36);      // 0.5 inches
   body.setMarginBottom(36);   // 0.5 inches
-  body.setMarginLeft(14);     // ~0.2 inches
-  body.setMarginRight(14);    // ~0.2 inches
+  body.setMarginLeft(13);     // ~0.18 inches (Avery 5160 spec)
+  body.setMarginRight(13);    // ~0.18 inches
 
   // Create table with 3 columns for labels
   const numRows = Math.ceil(people.length / LABELS_PER_ROW);
@@ -256,6 +277,9 @@ function generateLabelsDocument(people, folderName) {
   let personIndex = 0;
   for (let row = 0; row < numRows; row++) {
     const tableRow = table.appendTableRow();
+
+    // Set row height to 1 inch (72 points) for Avery 5160
+    tableRow.setMinimumHeight(LABEL_HEIGHT * 72);
 
     for (let col = 0; col < LABELS_PER_ROW; col++) {
       if (personIndex >= people.length) {
@@ -272,7 +296,7 @@ function generateLabelsDocument(people, folderName) {
     }
   }
 
-  // Format table
+  // Format table - no borders for clean label printing
   table.setBorderWidth(0);
 
   doc.saveAndClose();
@@ -292,23 +316,27 @@ function formatLabelText(person) {
 }
 
 /**
- * Formats a label cell with proper dimensions and styling
+ * Formats a label cell with proper dimensions and styling for Avery 5160
  */
 function formatLabelCell(cell) {
   // Set cell dimensions (convert inches to points: 1 inch = 72 points)
-  cell.setWidth(LABEL_WIDTH * 72);
-  cell.setPaddingTop(LABEL_MARGIN * 72);
-  cell.setPaddingBottom(LABEL_MARGIN * 72);
-  cell.setPaddingLeft(LABEL_MARGIN * 72);
-  cell.setPaddingRight(LABEL_MARGIN * 72);
+  // Avery 5160: 2.625" x 1" labels
+  cell.setWidth(LABEL_WIDTH * 72);  // 2.625 inches = 189 points
+
+  // Reduced padding to maximize usable space on labels
+  cell.setPaddingTop(8);     // ~0.11 inches
+  cell.setPaddingBottom(8);  // ~0.11 inches
+  cell.setPaddingLeft(10);   // ~0.14 inches
+  cell.setPaddingRight(10);  // ~0.14 inches
 
   // Set vertical alignment to top
   cell.setVerticalAlignment(DocumentApp.VerticalAlignment.TOP);
 
   // Format text in cell
   const text = cell.editAsText();
-  text.setFontSize(10);
+  text.setFontSize(9);        // Slightly smaller for better fit
   text.setFontFamily('Arial');
+  text.setLineSpacing(1.0);   // Single spacing
 }
 
 /** ========================== HELPER MESSAGE ================== **/
