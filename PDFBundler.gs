@@ -140,15 +140,29 @@ function generatePDFBundleWithLabels() {
   const labelsPdfCreated = generateLabelsPDF(people, folderName, folder);
 
   // Show completion message
-  ui.alert(
-    'PDF Bundle Created!\n\n' +
-    'PDFs generated: ' + generatedCount + '\n' +
-    'Labels document: ' + (labelsPdfCreated ? 'Created (PDF)' : 'Failed') + '\n' +
-    'Total labels: ' + people.length + '\n\n' +
-    'Folder: ' + folderName + '\n' +
-    'Location: ' + folder.getUrl() + '\n\n' +
-    'Print the "Mailing Labels.pdf" file on Avery 5160 label sheets.'
-  );
+  if (labelsPdfCreated) {
+    ui.alert(
+      'PDF Bundle Created Successfully!\n\n' +
+      '✓ PDFs generated: ' + generatedCount + '\n' +
+      '✓ Labels PDF: Created\n' +
+      '✓ Total labels: ' + people.length + '\n\n' +
+      'Folder Name: ' + folderName + '\n' +
+      'Folder Location: ' + folder.getUrl() + '\n\n' +
+      'Files in folder:\n' +
+      '• ' + generatedCount + ' personalized PDFs (one per person)\n' +
+      '• Mailing Labels.pdf (print on Avery 5160 sheets)\n\n' +
+      'Click the folder URL above to open it.'
+    );
+  } else {
+    ui.alert(
+      'PDF Bundle Partially Created\n\n' +
+      'PDFs generated: ' + generatedCount + '\n' +
+      'Labels PDF: FAILED\n\n' +
+      'Folder: ' + folderName + '\n' +
+      'Location: ' + folder.getUrl() + '\n\n' +
+      'Check View → Logs for error details.'
+    );
+  }
 }
 
 /** ========================== PDF GENERATION =================== **/
@@ -237,22 +251,27 @@ function sanitizeFileName(name) {
  */
 function generateLabelsPDF(people, folderName, folder) {
   try {
-    // Generate the labels document
+    // Generate the labels document (created in root Drive initially)
     const labelsDoc = generateLabelsDocument(people, folderName);
 
-    // Get the file and export as PDF
-    const labelsFile = DriveApp.getFileById(labelsDoc.getId());
-    const labelsPdfBlob = labelsFile.getAs('application/pdf');
+    // Get the temporary doc file
+    const tempDocFile = DriveApp.getFileById(labelsDoc.getId());
 
-    // Save PDF to folder
-    folder.createFile(labelsPdfBlob.setName('Mailing Labels.pdf'));
+    // Export as PDF blob
+    const pdfBlob = tempDocFile.getAs('application/pdf');
 
-    // Delete the temporary Google Doc
-    labelsFile.setTrashed(true);
+    // Create the PDF in the target folder with proper name
+    const pdfFile = folder.createFile(pdfBlob);
+    pdfFile.setName('Mailing Labels.pdf');
 
+    // Delete the temporary Google Doc from root
+    tempDocFile.setTrashed(true);
+
+    Logger.log('Labels PDF created successfully in folder: ' + folder.getName());
     return true;
   } catch (e) {
     Logger.log('Error generating labels PDF: ' + e.message);
+    Logger.log('Stack trace: ' + e.stack);
     return false;
   }
 }
