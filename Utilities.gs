@@ -3,6 +3,64 @@
  * Shared helper functions for name processing, HTML handling, and Drive operations
  */
 
+/** ========================== TEXT NORMALIZATION ============== **/
+
+/**
+ * Normalizes text capitalization - converts ALL CAPS to Title Case
+ */
+function normalizeCapitalization(text) {
+  if (!text) return '';
+
+  const str = String(text).trim();
+
+  // Check if text is all uppercase (accounting for spaces and punctuation)
+  const lettersOnly = str.replace(/[^a-zA-Z]/g, '');
+  if (lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase()) {
+    // Text is all caps, convert to title case
+    return toTitleCase(str);
+  }
+
+  // Text has mixed case, leave it alone
+  return str;
+}
+
+/**
+ * Converts string to Title Case
+ */
+function toTitleCase(str) {
+  // Words that should stay lowercase (unless first word)
+  const lowercase = ['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'via'];
+
+  return str.toLowerCase().replace(/\b\w+/g, function(word, index) {
+    // Always capitalize first word
+    if (index === 0) {
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }
+
+    // Keep certain words lowercase unless they're the first word
+    if (lowercase.indexOf(word.toLowerCase()) !== -1) {
+      return word.toLowerCase();
+    }
+
+    // Capitalize everything else
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  });
+}
+
+/**
+ * Normalizes person data - applies proper capitalization
+ */
+function normalizePersonData(personData) {
+  return {
+    fullName: normalizeCapitalization(personData.fullName || ''),
+    firstName: normalizeCapitalization(personData.firstName || ''),
+    pacName: normalizeCapitalization(personData.pacName || ''),
+    email: personData.email || '', // Don't normalize emails
+    phone: personData.phone || '', // Don't normalize phones
+    address: normalizeCapitalization(personData.address || '')
+  };
+}
+
 /** ========================== PLACEHOLDER REPLACEMENT ========== **/
 
 /**

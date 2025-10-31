@@ -50,7 +50,7 @@ function createDraftsFromList() {
     const firstName = extractFirstName(fullName);
 
     // Build person data object for placeholder replacement
-    const personData = {
+    let personData = {
       fullName: fullName,
       firstName: firstName,
       pacName: pacName,
@@ -58,6 +58,9 @@ function createDraftsFromList() {
       phone: phone,
       address: address
     };
+
+    // Normalize capitalization (ALL CAPS → Title Case)
+    personData = normalizePersonData(personData);
 
     // Replace placeholders in subject and body
     const subject = replaceAllPlaceholders(subjectTemplate, personData);
@@ -121,7 +124,7 @@ function sendEmailsFromListWithAttachment() {
     const firstName = extractFirstName(fullName);
 
     // Build person data object for placeholder replacement
-    const personData = {
+    let personData = {
       fullName: fullName,
       firstName: firstName,
       pacName: pacName,
@@ -129,6 +132,9 @@ function sendEmailsFromListWithAttachment() {
       phone: phone,
       address: address
     };
+
+    // Normalize capitalization (ALL CAPS → Title Case)
+    personData = normalizePersonData(personData);
 
     // Replace placeholders in subject and body
     const subject = replaceAllPlaceholders(subjectTemplate, personData);

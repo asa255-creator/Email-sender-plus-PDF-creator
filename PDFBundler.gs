@@ -76,19 +76,36 @@ function generatePDFBundleWithLabels() {
     return;
   }
 
-  const width = Math.max(BUNDLE_NAME_COL, BUNDLE_PAC_COL, BUNDLE_ADDRESS_COL);
+  const width = 5; // Read all 5 columns (A-E)
   const values = listSh.getRange(2, 1, lastRow - 1, width).getDisplayValues();
 
   // Filter valid rows (must have name and address)
   const people = [];
   values.forEach(row => {
-    const name = String(row[BUNDLE_NAME_COL - 1] || '').trim();
-    const pacNames = String(row[BUNDLE_PAC_COL - 1] || '').trim();
+    const fullName = String(row[BUNDLE_NAME_COL - 1] || '').trim();
+    const pacName = String(row[BUNDLE_PAC_COL - 1] || '').trim();
+    const email = String(row[BUNDLE_EMAIL_COL - 1] || '').trim();
+    const phone = String(row[BUNDLE_PHONE_COL - 1] || '').trim();
     const address = String(row[BUNDLE_ADDRESS_COL - 1] || '').trim();
 
-    if (name && address) {
-      people.push({ name, pacNames, address });
-    }
+    if (!fullName || !address) return;
+
+    const firstName = extractFirstName(fullName);
+
+    // Build person data object
+    let personData = {
+      fullName: fullName,
+      firstName: firstName,
+      pacName: pacName,
+      email: email,
+      phone: phone,
+      address: address
+    };
+
+    // Normalize capitalization (ALL CAPS → Title Case)
+    personData = normalizePersonData(personData);
+
+    people.push(personData);
   });
 
   if (people.length === 0) {
@@ -105,11 +122,11 @@ function generatePDFBundleWithLabels() {
   let copiedCount = 0;
   people.forEach(person => {
     try {
-      const fileName = `${sanitizeFileName(person.name)}.pdf`;
+      const fileName = `${sanitizeFileName(person.fullName)}.pdf`;
       const copiedFile = templateFile.makeCopy(fileName, folder);
       copiedCount++;
     } catch (e) {
-      Logger.log('Error copying PDF for ' + person.name + ': ' + e.message);
+      Logger.log('Error copying PDF for ' + person.fullName + ': ' + e.message);
     }
   });
 
@@ -190,9 +207,9 @@ function generateLabelsDocument(people, folderName) {
  * Formats the text for a single label
  */
 function formatLabelText(person) {
-  let text = person.name;
-  if (person.pacNames) {
-    text += '\n' + person.pacNames;
+  let text = person.fullName;
+  if (person.pacName) {
+    text += '\n' + person.pacName;
   }
   text += '\n' + person.address;
   return text;
