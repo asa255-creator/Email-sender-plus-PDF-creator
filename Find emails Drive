@@ -1,0 +1,218 @@
+/** Click-button VCF lookup from Drive
+    Button should call: FEFD_fillMissingEmailsFromDrivePrompt
+    Reads names in column A, fills blank emails in column C and phones in column D
+    Prompts for a Drive URL or file ID of a .vcf
+**/
+function FEFD_fillMissingEmailsFromDrivePrompt() {
+  // All config and helpers are local to avoid global name clashes
+  const SHEET_NAME = 'People'; // change if needed
+  const NAME_COL_INDEX = 1;    // column A
+  const EMAIL_COL_INDEX = 3;   // column C
+  const PHONE_COL_INDEX = 4;   // column D
+
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt(
+    'VCF file',
+    'Paste the Google Drive file URL or file ID for your .vcf and click OK.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+
+  const input = String(resp.getResponseText() || '').trim();
+  if (!input) { ui.alert('No input provided.'); return; }
+
+  const fileId = extractDriveFileId(input);
+  if (!fileId) { ui.alert('Could not extract a Drive file ID. Paste the full Drive URL or the file ID.'); return; }
+
+  let nameToEmail, nameToPhone;
+  try {
+    nameToEmail = buildVcfEmailMap(fileId); // normalized name -> email
+    nameToPhone = buildVcfPhoneMap(fileId); // normalized name -> phone
+  } catch (e) {
+    ui.alert('Error reading VCF: ' + e.message);
+    return;
+  }
+  if ((!nameToEmail || Object.keys(nameToEmail).length === 0) && (!nameToPhone || Object.keys(nameToPhone).length === 0)) {
+    ui.alert('No contacts with emails or phones found in that VCF.');
+    return;
+  }
+
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) throw new Error('Sheet "' + SHEET_NAME + '" not found');
+
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) { ui.alert('No data rows.'); return; }
+
+  const width = Math.max(NAME_COL_INDEX, EMAIL_COL_INDEX, PHONE_COL_INDEX);
+  const values = sh.getRange(2, 1, lastRow - 1, width).getDisplayValues();
+
+  let filledEmails = 0;
+  let filledPhones = 0;
+  for (let i = 0; i < values.length; i++) {
+    const rowNumber = i + 2;
+    const fullName = String(values[i][NAME_COL_INDEX - 1] || '').trim();
+    const currentEmail = String(values[i][EMAIL_COL_INDEX - 1] || '').trim();
+    const currentPhone = String(values[i][PHONE_COL_INDEX - 1] || '').trim();
+    if (!fullName) continue;
+
+    // Fill email if blank
+    if (!currentEmail) {
+      const email = matchEmailFromMap(fullName, nameToEmail);
+      if (email) {
+        sh.getRange(rowNumber, EMAIL_COL_INDEX).setValue(email);
+        filledEmails++;
+      }
+    }
+
+    // Fill phone if blank
+    if (!currentPhone) {
+      const phone = matchPhoneFromMap(fullName, nameToPhone);
+      if (phone) {
+        sh.getRange(rowNumber, PHONE_COL_INDEX).setValue(phone);
+        filledPhones++;
+      }
+    }
+  }
+  ui.alert('Filled from VCF\nEmails: ' + filledEmails + '\nPhones: ' + filledPhones);
+
+  // ------------- helpers ------------- //
+
+  function extractDriveFileId(s) {
+    const m =
+      s.match(/\/d\/([A-Za-z0-9_-]{20,})\//) ||
+      s.match(/id=([A-Za-z0-9_-]{20,})/) ||
+      s.match(/^([A-Za-z0-9_-]{20,})$/);
+    return m ? m[1] : '';
+  }
+
+  function buildVcfEmailMap(vcfFileId) {
+    const file = DriveApp.getFileById(vcfFileId);
+    const text = file.getBlob().getDataAsString('UTF-8');
+    const cards = text.split(/END:VCARD/i);
+    const map = {};
+    cards.forEach(blockRaw => {
+      const block = unfoldVcardLines(blockRaw);
+      const email = extractVcfEmail(block);
+      if (!email) return;
+      const name = extractVcfName(block);
+      if (!name) return;
+      nameVariants(name).forEach(v => {
+        const key = norm(v);
+        if (key && !map[key]) map[key] = email; // first email wins
+      });
+    });
+    return map;
+  }
+
+  function buildVcfPhoneMap(vcfFileId) {
+    const file = DriveApp.getFileById(vcfFileId);
+    const text = file.getBlob().getDataAsString('UTF-8');
+    const cards = text.split(/END:VCARD/i);
+    const map = {};
+    cards.forEach(blockRaw => {
+      const block = unfoldVcardLines(blockRaw);
+      const phone = extractVcfBestPhone(block);
+      if (!phone) return;
+      const name = extractVcfName(block);
+      if (!name) return;
+      nameVariants(name).forEach(v => {
+        const key = norm(v);
+        if (key && !map[key]) map[key] = phone; // first phone wins
+      });
+    });
+    return map;
+  }
+
+  function unfoldVcardLines(s) {
+    return String(s || '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\n[ \t]/g, ''); // join folded lines
+  }
+
+  function extractVcfEmail(block) {
+    const re = /^\s*EMAIL(?:;[^:]+)?:\s*([^ \t\r\n;]+)\s*$/gim;
+    const m = re.exec(block);
+    return m ? String(m[1]).trim() : '';
+  }
+
+  function extractVcfBestPhone(block) {
+    // Collect all TEL entries with their type to pick the best
+    const re = /^\s*TEL(?:;([^:]+))?:\s*([^\s]+)\s*$/gim;
+    const found = [];
+    let m;
+    while ((m = re.exec(block)) !== null) {
+      const params = (m[1] || '').toLowerCase();
+      const value = (m[2] || '').trim();
+      if (!value) continue;
+      const score =
+        (params.includes('cell') || params.includes('mobile') || params.includes('iphone') ? 3 : 0) +
+        (params.includes('work') ? 1 : 0) +
+        (params.includes('home') ? 0 : 0);
+      found.push({ value, score });
+    }
+    if (!found.length) return '';
+    found.sort((a, b) => b.score - a.score);
+    return found[0].value;
+  }
+
+  function extractVcfName(block) {
+    let m = /^\s*FN:\s*(.+?)\s*$/gim.exec(block);
+    if (m) return m[1].trim();
+
+    m = /^\s*N:\s*([^;\n\r]*);([^;\n\r]*)/gim.exec(block);
+    if (m) {
+      const family = (m[1] || '').trim();
+      const given = (m[2] || '').trim();
+      return [given, family].filter(Boolean).join(' ');
+    }
+    return '';
+  }
+
+  function nameVariants(name) {
+    const clean = cleanName(name);
+    const parts = clean.split(/\s+/).filter(Boolean);
+    const out = new Set();
+    if (parts.length === 0) return [];
+
+    out.add(parts.join(' ')); // full form
+    if (parts.length >= 2) {
+      out.add(parts[0] + ' ' + parts[parts.length - 1]);   // First Last
+      out.add(parts[parts.length - 1] + ', ' + parts[0]);   // Last, First
+    }
+    out.add(parts[0]); // First only
+    return Array.from(out);
+  }
+
+  function cleanName(s) {
+    let t = String(s || '').replace(/["']/g, '').replace(/\(.*?\)/g, ' ');
+    t = t.replace(/\b(mr|mrs|ms|miss|mx|dr|prof)\.?\b/i, '');
+    return t.replace(/\s+/g, ' ').trim();
+  }
+
+  function norm(s) {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function matchEmailFromMap(fullName, map) {
+    if (!map) return '';
+    const variants = nameVariants(fullName).map(norm);
+    for (const v of variants) {
+      if (v && map[v]) return map[v];
+    }
+    return '';
+  }
+
+  function matchPhoneFromMap(fullName, map) {
+    if (!map) return '';
+    const variants = nameVariants(fullName).map(norm);
+    for (const v of variants) {
+      if (v && map[v]) return map[v];
+    }
+    return '';
+  }
+}
