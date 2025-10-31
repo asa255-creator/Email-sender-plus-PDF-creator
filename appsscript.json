@@ -4,18 +4,18 @@
     "enabledAdvancedServices": [
       {
         "userSymbol": "Gmail",
-        "version": "v1",
-        "serviceId": "gmail"
-      },
-      {
-        "userSymbol": "People",
-        "version": "v1",
-        "serviceId": "people"
+        "serviceId": "gmail",
+        "version": "v1"
       },
       {
         "userSymbol": "Drive",
-        "version": "v3",
-        "serviceId": "drive"
+        "serviceId": "drive",
+        "version": "v3"
+      },
+      {
+        "userSymbol": "People",
+        "serviceId": "peopleapi",
+        "version": "v1"
       }
     ]
   },
