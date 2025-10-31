@@ -250,12 +250,14 @@ function sanitizeFileName(name) {
  * Generates labels PDF and saves to folder
  */
 function generateLabelsPDF(people, folderName, folder) {
+  let tempDocFile = null;
+
   try {
     // Generate the labels document (created in root Drive initially)
     const labelsDoc = generateLabelsDocument(people, folderName);
 
     // Get the temporary doc file
-    const tempDocFile = DriveApp.getFileById(labelsDoc.getId());
+    tempDocFile = DriveApp.getFileById(labelsDoc.getId());
 
     // Export as PDF blob
     const pdfBlob = tempDocFile.getAs('application/pdf');
@@ -272,6 +274,17 @@ function generateLabelsPDF(people, folderName, folder) {
   } catch (e) {
     Logger.log('Error generating labels PDF: ' + e.message);
     Logger.log('Stack trace: ' + e.stack);
+
+    // Try to clean up temp doc even if there was an error
+    if (tempDocFile) {
+      try {
+        tempDocFile.setTrashed(true);
+        Logger.log('Cleaned up temporary doc after error');
+      } catch (cleanupError) {
+        Logger.log('Could not clean up temp doc: ' + cleanupError.message);
+      }
+    }
+
     return false;
   }
 }
@@ -355,7 +368,7 @@ function formatLabelCell(cell) {
   const text = cell.editAsText();
   text.setFontSize(9);        // Slightly smaller for better fit
   text.setFontFamily('Arial');
-  text.setLineSpacing(1.0);   // Single spacing
+  // Note: setLineSpacing() is not available on Text objects, only on Paragraphs
 }
 
 /** ========================== HELPER MESSAGE ================== **/
