@@ -37,7 +37,9 @@ function generatePDFBundleWithLabels() {
 
   const attachmentRef = String(detailsSh.getRange('C2').getValue() || '').trim();
   if (!attachmentRef) {
-    ui.alert('Error: No PDF file specified in email details C2. Please add a Google Drive URL or file ID.');
+    ui.alert('Error: No template document specified in email details C2.\n\n' +
+             'Please add a Google Docs URL or file ID.\n' +
+             'The document should contain placeholders like [FIRST NAME], [FULL NAME], [PAC NAME], etc.');
     return;
   }
 
@@ -50,14 +52,14 @@ function generatePDFBundleWithLabels() {
     return;
   }
 
-  let templateFile;
+  let templateDoc;
   try {
-    templateFile = DriveApp.getFileById(fileId);
+    templateDoc = DocumentApp.openById(fileId);
   } catch (e) {
-    ui.alert('Error: Cannot access file with ID: ' + fileId + '\n\n' +
+    ui.alert('Error: Cannot open document with ID: ' + fileId + '\n\n' +
              'Error message: ' + e.message + '\n\n' +
              'Make sure:\n' +
-             '1. The file exists in your Drive\n' +
+             '1. The file is a Google Doc (not PDF)\n' +
              '2. You have access to the file\n' +
              '3. The file ID is correct');
     return;
@@ -118,15 +120,19 @@ function generatePDFBundleWithLabels() {
   const folderName = `PDF Bundle ${timestamp}`;
   const folder = DriveApp.createFolder(folderName);
 
-  // Copy PDFs to folder
-  let copiedCount = 0;
+  // Generate personalized PDFs
+  let generatedCount = 0;
   people.forEach(person => {
     try {
+      // Create personalized PDF for this person
+      const pdfBlob = createPersonalizedPDF(templateDoc, person);
       const fileName = `${sanitizeFileName(person.fullName)}.pdf`;
-      const copiedFile = templateFile.makeCopy(fileName, folder);
-      copiedCount++;
+
+      // Save PDF to folder
+      folder.createFile(pdfBlob.setName(fileName));
+      generatedCount++;
     } catch (e) {
-      Logger.log('Error copying PDF for ' + person.fullName + ': ' + e.message);
+      Logger.log('Error generating PDF for ' + person.fullName + ': ' + e.message);
     }
   });
 
@@ -142,11 +148,81 @@ function generatePDFBundleWithLabels() {
   // Show completion message
   ui.alert(
     'PDF Bundle Created!\n\n' +
-    'PDFs copied: ' + copiedCount + '\n' +
+    'PDFs generated: ' + generatedCount + '\n' +
     'Labels created: ' + people.length + '\n\n' +
     'Folder: ' + folderName + '\n' +
     'Location: ' + folder.getUrl()
   );
+}
+
+/** ========================== PDF GENERATION =================== **/
+
+/**
+ * Creates a personalized PDF from template for one person
+ */
+function createPersonalizedPDF(templateDoc, personData) {
+  // Make a temporary copy of the template
+  const tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy('temp_' + personData.fullName);
+  const tempDoc = DocumentApp.openById(tempDocFile.getId());
+  const body = tempDoc.getBody();
+
+  // Replace placeholders using replaceText (preserves formatting)
+  replacePlaceholdersInDocument(body, personData);
+
+  // Save and close
+  tempDoc.saveAndClose();
+
+  // Export as PDF
+  const pdfBlob = tempDocFile.getAs('application/pdf');
+
+  // Delete the temporary doc
+  tempDocFile.setTrashed(true);
+
+  return pdfBlob;
+}
+
+/**
+ * Replaces all placeholders in a document body
+ */
+function replacePlaceholdersInDocument(body, personData) {
+  // Parse address into lines if provided
+  const addressLines = parseAddress(personData.address || '');
+
+  // Current date
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy');
+
+  // Define all replacements
+  const replacements = {
+    'FIRST NAME': personData.firstName || '',
+    'FIRSTNAME': personData.firstName || '',
+    'FULL NAME': personData.fullName || '',
+    'FULLNAME': personData.fullName || '',
+    'NAME': personData.fullName || '',
+    'PAC NAME': personData.pacName || '',
+    'PACNAME': personData.pacName || '',
+    'PAC NAMES': personData.pacName || '',
+    'ORGANIZATION NAME': personData.pacName || '',
+    'ORGANIZATION': personData.pacName || '',
+    'ADDRESS LINE 1': addressLines.line1,
+    'ADDRESS LINE 2': addressLines.line2,
+    'ADDRESS': personData.address || '',
+    'DATE': today,
+    'TODAY': today
+  };
+
+  // Replace all patterns: [PLACEHOLDER], <PLACEHOLDER>, {{PLACEHOLDER}}
+  Object.keys(replacements).forEach(key => {
+    const value = replacements[key];
+    // [PLACEHOLDER] format (case insensitive)
+    body.replaceText('\\[\\s*' + key + '\\s*\\]', value);
+    body.replaceText('\\[\\s*' + key.toLowerCase() + '\\s*\\]', value);
+    // <PLACEHOLDER> format (case insensitive)
+    body.replaceText('<\\s*' + key + '\\s*>', value);
+    body.replaceText('<\\s*' + key.toLowerCase() + '\\s*>', value);
+    // {{PLACEHOLDER}} format (case insensitive)
+    body.replaceText('\\{\\{\\s*' + key + '\\s*\\}\\}', value);
+    body.replaceText('\\{\\{\\s*' + key.toLowerCase() + '\\s*\\}\\}', value);
+  });
 }
 
 /** ========================== PDF OPERATIONS ================== **/
