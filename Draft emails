@@ -1,0 +1,262 @@
+/** ========================== CONFIG ========================== **/
+const LIST_SHEET = 'People';           // names in A, emails in C
+const DETAILS_SHEET = 'email details'; // A2 = body template, B2 = subject, C2 = Drive URL or ID for PDF
+const NAME_COL = 1;                    // A
+const EMAIL_COL = 3;                   // C
+const USE_HTML = true;                 // create HTML drafts or HTML emails
+
+/** ========================== MENU ============================ **/
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Email Merge')
+    .addItem('Create Gmail Drafts', 'createDraftsFromList')
+    .addItem('Send Emails with Attachment', 'sendEmailsFromListWithAttachment')
+    .addToUi();
+}
+
+/** ========================== MAIN ACTION ===================== **/
+function createDraftsFromList() {
+  const ss = SpreadsheetApp.getActive();
+  const listSh = ss.getSheetByName(LIST_SHEET) || ss.getActiveSheet();
+  const detailsSh = ss.getSheetByName(DETAILS_SHEET);
+  if (!detailsSh) throw new Error('Sheet "email details" not found.');
+
+  // Use getValue so we keep raw HTML if present
+  const bodyTemplate = String(detailsSh.getRange('A2').getValue() || '');
+  const subjectTemplate = String(detailsSh.getRange('B2').getValue() || '');
+  if (!bodyTemplate) throw new Error('Body template missing in email details A2.');
+  if (!subjectTemplate) throw new Error('Subject missing in email details B2.');
+
+  const lastRow = listSh.getLastRow();
+  if (lastRow < 2) {
+    SpreadsheetApp.getUi().alert('No data rows found.');
+    return;
+  }
+
+  const width = Math.max(NAME_COL, EMAIL_COL);
+  const values = listSh.getRange(2, 1, lastRow - 1, width).getDisplayValues();
+
+  const signatureHtml = getDefaultSignatureHtml(); // may be ''
+
+  let created = 0;
+  values.forEach(row => {
+    const fullName = String(row[NAME_COL - 1] || '').trim();
+    const email = String(row[EMAIL_COL - 1] || '').trim();
+    if (!fullName || !email) return;
+
+    const firstName = extractFirstName(fullName);
+    const subject = fillFirstNameInSubject(subjectTemplate, firstName);
+
+    if (USE_HTML) {
+      const bodyHtml = buildHtmlBody(bodyTemplate, firstName, signatureHtml);
+      GmailApp.createDraft(email, subject, '', { htmlBody: bodyHtml });
+    } else {
+      const bodyText = fillFirstNameInBody(asPlainText(bodyTemplate), firstName);
+      const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
+      GmailApp.createDraft(email, subject, bodyWithSig);
+    }
+
+    created++;
+  });
+
+  SpreadsheetApp.getUi().alert('Drafts created: ' + created);
+}
+
+/** ===================== SEND WITH ATTACHMENT ================= **/
+function sendEmailsFromListWithAttachment() {
+  const ss = SpreadsheetApp.getActive();
+  const listSh = ss.getSheetByName(LIST_SHEET) || ss.getActiveSheet();
+  const detailsSh = ss.getSheetByName(DETAILS_SHEET);
+  if (!detailsSh) throw new Error('Sheet "email details" not found.');
+
+  const bodyTemplate = String(detailsSh.getRange('A2').getValue() || '');
+  const subjectTemplate = String(detailsSh.getRange('B2').getValue() || '');
+  const attachmentRef = String(detailsSh.getRange('C2').getValue() || ''); // Drive URL or file ID
+  if (!bodyTemplate) throw new Error('Body template missing in email details A2.');
+  if (!subjectTemplate) throw new Error('Subject missing in email details B2.');
+
+  let file = null;
+  if (attachmentRef) {
+    file = fileFromDriveLink(attachmentRef);
+    if (!file) throw new Error('Could not open the file from C2. Check that the link or ID is correct and you have access.');
+  }
+
+  const lastRow = listSh.getLastRow();
+  if (lastRow < 2) {
+    SpreadsheetApp.getUi().alert('No data rows found.');
+    return;
+  }
+
+  const width = Math.max(NAME_COL, EMAIL_COL);
+  const values = listSh.getRange(2, 1, lastRow - 1, width).getDisplayValues();
+
+  const signatureHtml = getDefaultSignatureHtml(); // may be ''
+
+  let sent = 0;
+  values.forEach(row => {
+    const fullName = String(row[NAME_COL - 1] || '').trim();
+    const email = String(row[EMAIL_COL - 1] || '').trim();
+    if (!fullName || !email) return;
+
+    const firstName = extractFirstName(fullName);
+    const subject = fillFirstNameInSubject(subjectTemplate, firstName);
+
+    if (USE_HTML) {
+      const bodyHtml = buildHtmlBody(bodyTemplate, firstName, signatureHtml);
+      const options = file
+        ? { htmlBody: bodyHtml, attachments: [file.getAs(MimeType.PDF)] }
+        : { htmlBody: bodyHtml };
+      GmailApp.sendEmail(email, subject, stripHtml(bodyHtml) || ' ', options);
+    } else {
+      const bodyText = fillFirstNameInBody(asPlainText(bodyTemplate), firstName);
+      const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
+      const options = file ? { attachments: [file.getAs(MimeType.PDF)] } : {};
+      GmailApp.sendEmail(email, subject, bodyWithSig, options);
+    }
+
+    sent++;
+  });
+
+  SpreadsheetApp.getUi().alert('Emails sent: ' + sent + (file ? ' (with attachment)' : ' (no attachment)'));
+}
+
+/** ========================== HELPERS ========================= **/
+function extractFirstName(fullName) {
+  let s = fullName.replace(/["']/g, '').replace(/\(.*?\)/g, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(/^(mr|mrs|ms|miss|mx|dr|prof)\.\s+/i, '');
+  if (s.includes(',')) {
+    const parts = s.split(',').map(t => t.trim()).filter(Boolean);
+    if (parts.length > 1) s = parts[1];
+  }
+  return (s.split(/\s+/)[0] || '').trim();
+}
+
+function fillFirstNameInSubject(template, firstName) {
+  if (!template) return '';
+  return replaceFirstNamePlaceholders(template, firstName);
+}
+
+function fillFirstNameInBody(templatePlainText, firstName) {
+  if (!templatePlainText) return '';
+  const replaced = replaceFirstNamePlaceholders(templatePlainText, firstName);
+  if (replaced !== templatePlainText) return replaced;
+  return `Hi ${firstName},\n\n` + templatePlainText;
+}
+
+function fillFirstNameInHtml(templateHtml, firstName) {
+  if (!templateHtml) return '';
+  const replaced = replaceFirstNamePlaceholders(templateHtml, firstName);
+  if (replaced !== templateHtml) return ensureHtmlContainer(replaced);
+  // No placeholder found. Prepend a greeting paragraph.
+  const greeting = `<p>Hi ${escapeHtml(firstName)},</p>`;
+  return ensureHtmlContainer(greeting + templateHtml);
+}
+
+function replaceFirstNamePlaceholders(template, firstName) {
+  const patterns = [
+    /\[\s*first\s*name\s*\]/ig,
+    /<\s*first\s*name\s*>/ig,
+    /\{\{\s*first\s*name\s*\}\}/ig,
+    /\{\{\s*FirstName\s*\}\}/g
+  ];
+  let result = template;
+  patterns.forEach(p => { result = result.replace(p, firstName); });
+  return result;
+}
+
+/** Build HTML body, preserving lists and other tags if template is HTML **/
+function buildHtmlBody(templateFromA2, firstName, signatureHtml) {
+  const looksHtml = isHtml(templateFromA2);
+  let bodyHtml = looksHtml
+    ? fillFirstNameInHtml(templateFromA2, firstName)
+    : textToHtml(fillFirstNameInBody(asPlainText(templateFromA2), firstName));
+  if (signatureHtml) bodyHtml += appendSignature(signatureHtml);
+  return bodyHtml;
+}
+
+/** Heuristics to detect HTML **/
+function isHtml(s) {
+  if (!s) return false;
+  const str = String(s).trim();
+  if (str.indexOf('<') === -1 || str.indexOf('>') === -1) return false;
+  // Require at least one common HTML tag to reduce false positives
+  return /<\s*(p|div|br|ul|ol|li|a|strong|em|span|table|tbody|tr|td|h[1-6])\b/i.test(str);
+}
+
+function ensureHtmlContainer(html) {
+  if (/<\s*html\b|<\s*body\b/i.test(html)) return html;
+  return `<div>${html}</div>`;
+}
+
+function asPlainText(s) {
+  // If someone pasted HTML, strip tags before treating as plain text
+  return stripHtml(String(s || ''));
+}
+
+function textToHtml(txt) {
+  // Keep links and paragraphs, but do not invent bullets
+  let html = escapeHtml(txt);
+  html = html.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1">$1</a>');
+  html = html.replace(/\n{2,}/g, '</p><p>');
+  html = '<p>' + html.replace(/\n/g, '<br>') + '</p>';
+  return html;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function appendSignature(signatureHtml) {
+  if (!signatureHtml) return '';
+  return '<br><br>' + signatureHtml;
+}
+
+function getDefaultSignatureHtml() {
+  try {
+    const res = Gmail.Users.Settings.SendAs.list('me');
+    if (!res || !res.sendAs || !res.sendAs.length) return '';
+    const primary = res.sendAs.find(s => s.isDefault) || res.sendAs[0];
+    return primary.signature || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function stripHtml(html) {
+  return String(html).replace(/<[^>]*>/g, '').replace(/\s+\n/g, '\n').trim();
+}
+
+/** ========================== DRIVE HELPERS ==================== **/
+function fileFromDriveLink(input) {
+  const id = extractDriveId(input);
+  if (!id) return null;
+  try {
+    return DriveApp.getFileById(id);
+  } catch (e) {
+    return null;
+  }
+}
+
+function extractDriveId(s) {
+  if (!s) return '';
+  s = String(s).trim();
+
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(s) && s.indexOf('http') !== 0) return s;
+
+  let m = s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return m[1];
+
+  m = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return m[1];
+
+  m = s.match(/\/uc\?[^#]*id=([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return m[1];
+
+  m = s.match(/drive\.google\.com\/(?:file\/d\/|drive\/folders\/)?([a-zA-Z0-9_-]{20,})(?:\/|$)/);
+  if (m && m[1]) return m[1];
+
+  return '';
+}
