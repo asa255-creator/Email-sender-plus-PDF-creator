@@ -3,7 +3,90 @@
  * Shared helper functions for name processing, HTML handling, and Drive operations
  */
 
-/** ========================== NAME PROCESSING ================== **/
+/** ========================== PLACEHOLDER REPLACEMENT ========== **/
+
+/**
+ * Replaces all placeholders in template with person data
+ * Supports: [FIRST NAME], [FULL NAME], [PAC NAME], [ORGANIZATION NAME],
+ *           [ADDRESS LINE 1], [ADDRESS LINE 2], [DATE]
+ */
+function replaceAllPlaceholders(template, personData) {
+  if (!template) return '';
+
+  let result = template;
+
+  // Parse address into lines if provided
+  const addressLines = parseAddress(personData.address || '');
+
+  // Current date
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy');
+
+  // Define all replacements
+  const replacements = {
+    // Name variations
+    'FIRST NAME': personData.firstName || '',
+    'FIRSTNAME': personData.firstName || '',
+    'FULL NAME': personData.fullName || '',
+    'FULLNAME': personData.fullName || '',
+    'NAME': personData.fullName || '',
+
+    // Organization/PAC
+    'PAC NAME': personData.pacName || '',
+    'PACNAME': personData.pacName || '',
+    'PAC NAMES': personData.pacName || '',
+    'ORGANIZATION NAME': personData.pacName || '',
+    'ORGANIZATION': personData.pacName || '',
+
+    // Address
+    'ADDRESS LINE 1': addressLines.line1,
+    'ADDRESS LINE 2': addressLines.line2,
+    'ADDRESS': personData.address || '',
+
+    // Date
+    'DATE': today,
+    'TODAY': today
+  };
+
+  // Replace all patterns: [PLACEHOLDER], <PLACEHOLDER>, {{PLACEHOLDER}}
+  Object.keys(replacements).forEach(key => {
+    const value = replacements[key];
+    // [PLACEHOLDER] format (case insensitive)
+    result = result.replace(new RegExp('\\[\\s*' + key + '\\s*\\]', 'gi'), value);
+    // <PLACEHOLDER> format (case insensitive)
+    result = result.replace(new RegExp('<\\s*' + key + '\\s*>', 'gi'), value);
+    // {{PLACEHOLDER}} format (case insensitive)
+    result = result.replace(new RegExp('\\{\\{\\s*' + key + '\\s*\\}\\}', 'gi'), value);
+  });
+
+  return result;
+}
+
+/**
+ * Parses address into two lines
+ * Example: "123 Main St, Apt 4B, City, ST 12345" -> Line 1: "123 Main St, Apt 4B", Line 2: "City, ST 12345"
+ */
+function parseAddress(address) {
+  if (!address) return { line1: '', line2: '' };
+
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return { line1: address, line2: '' };
+  }
+
+  if (parts.length === 2) {
+    return { line1: parts[0], line2: parts[1] };
+  }
+
+  // 3+ parts: assume last part is "City, ST ZIP", everything before is address
+  const line2 = parts.slice(-2).join(', '); // Last two parts (City, State ZIP)
+  const line1 = parts.slice(0, -2).join(', '); // Everything before
+
+  return { line1, line2 };
+}
+
+/** ========================== NAME PROCESSING (Legacy) ========= **/
+// These functions are kept for backward compatibility
 
 /**
  * Extracts first name from full name, handling titles, quotes, and formats
@@ -66,7 +149,20 @@ function fillFirstNameInHtml(templateHtml, firstName) {
 /** ========================== HTML PROCESSING ================== **/
 
 /**
- * Build HTML body, preserving lists and other tags if template is HTML
+ * Build HTML body from template (after placeholders have been replaced)
+ */
+function buildHtmlBodyFromTemplate(templateWithReplacements, signatureHtml) {
+  const looksHtml = isHtml(templateWithReplacements);
+  let bodyHtml = looksHtml
+    ? ensureHtmlContainer(templateWithReplacements)
+    : textToHtml(asPlainText(templateWithReplacements));
+  if (signatureHtml) bodyHtml += appendSignature(signatureHtml);
+  return bodyHtml;
+}
+
+/**
+ * Build HTML body, preserving lists and other tags if template is HTML (LEGACY)
+ * @deprecated Use buildHtmlBodyFromTemplate with replaceAllPlaceholders instead
  */
 function buildHtmlBody(templateFromA2, firstName, signatureHtml) {
   const looksHtml = isHtml(templateFromA2);

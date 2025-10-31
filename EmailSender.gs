@@ -6,8 +6,11 @@
 /** ========================== CONFIG ========================== **/
 const LIST_SHEET = 'People';           // names in A, emails in C
 const DETAILS_SHEET = 'email details'; // A2 = body template, B2 = subject, C2 = Drive URL or ID for PDF
-const NAME_COL = 1;                    // A
-const EMAIL_COL = 3;                   // C
+const NAME_COL = 1;                    // A: Name
+const PAC_COL = 2;                     // B: PAC Names
+const EMAIL_COL = 3;                   // C: Email
+const PHONE_COL = 4;                   // D: Phone
+const ADDRESS_COL = 5;                 // E: Address
 const USE_HTML = true;                 // create HTML drafts or HTML emails
 
 /** ========================== CREATE DRAFTS =================== **/
@@ -29,7 +32,7 @@ function createDraftsFromList() {
     return;
   }
 
-  const width = Math.max(NAME_COL, EMAIL_COL);
+  const width = Math.max(NAME_COL, PAC_COL, EMAIL_COL, PHONE_COL, ADDRESS_COL);
   const values = listSh.getRange(2, 1, lastRow - 1, width).getDisplayValues();
 
   const signatureHtml = getDefaultSignatureHtml(); // may be ''
@@ -37,17 +40,34 @@ function createDraftsFromList() {
   let created = 0;
   values.forEach(row => {
     const fullName = String(row[NAME_COL - 1] || '').trim();
+    const pacName = String(row[PAC_COL - 1] || '').trim();
     const email = String(row[EMAIL_COL - 1] || '').trim();
+    const phone = String(row[PHONE_COL - 1] || '').trim();
+    const address = String(row[ADDRESS_COL - 1] || '').trim();
+
     if (!fullName || !email) return;
 
     const firstName = extractFirstName(fullName);
-    const subject = fillFirstNameInSubject(subjectTemplate, firstName);
+
+    // Build person data object for placeholder replacement
+    const personData = {
+      fullName: fullName,
+      firstName: firstName,
+      pacName: pacName,
+      email: email,
+      phone: phone,
+      address: address
+    };
+
+    // Replace placeholders in subject and body
+    const subject = replaceAllPlaceholders(subjectTemplate, personData);
+    const bodyWithPlaceholders = replaceAllPlaceholders(bodyTemplate, personData);
 
     if (USE_HTML) {
-      const bodyHtml = buildHtmlBody(bodyTemplate, firstName, signatureHtml);
+      const bodyHtml = buildHtmlBodyFromTemplate(bodyWithPlaceholders, signatureHtml);
       GmailApp.createDraft(email, subject, '', { htmlBody: bodyHtml });
     } else {
-      const bodyText = fillFirstNameInBody(asPlainText(bodyTemplate), firstName);
+      const bodyText = asPlainText(bodyWithPlaceholders);
       const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
       GmailApp.createDraft(email, subject, bodyWithSig);
     }
@@ -83,7 +103,7 @@ function sendEmailsFromListWithAttachment() {
     return;
   }
 
-  const width = Math.max(NAME_COL, EMAIL_COL);
+  const width = Math.max(NAME_COL, PAC_COL, EMAIL_COL, PHONE_COL, ADDRESS_COL);
   const values = listSh.getRange(2, 1, lastRow - 1, width).getDisplayValues();
 
   const signatureHtml = getDefaultSignatureHtml(); // may be ''
@@ -91,20 +111,37 @@ function sendEmailsFromListWithAttachment() {
   let sent = 0;
   values.forEach(row => {
     const fullName = String(row[NAME_COL - 1] || '').trim();
+    const pacName = String(row[PAC_COL - 1] || '').trim();
     const email = String(row[EMAIL_COL - 1] || '').trim();
+    const phone = String(row[PHONE_COL - 1] || '').trim();
+    const address = String(row[ADDRESS_COL - 1] || '').trim();
+
     if (!fullName || !email) return;
 
     const firstName = extractFirstName(fullName);
-    const subject = fillFirstNameInSubject(subjectTemplate, firstName);
+
+    // Build person data object for placeholder replacement
+    const personData = {
+      fullName: fullName,
+      firstName: firstName,
+      pacName: pacName,
+      email: email,
+      phone: phone,
+      address: address
+    };
+
+    // Replace placeholders in subject and body
+    const subject = replaceAllPlaceholders(subjectTemplate, personData);
+    const bodyWithPlaceholders = replaceAllPlaceholders(bodyTemplate, personData);
 
     if (USE_HTML) {
-      const bodyHtml = buildHtmlBody(bodyTemplate, firstName, signatureHtml);
+      const bodyHtml = buildHtmlBodyFromTemplate(bodyWithPlaceholders, signatureHtml);
       const options = file
         ? { htmlBody: bodyHtml, attachments: [file.getAs(MimeType.PDF)] }
         : { htmlBody: bodyHtml };
       GmailApp.sendEmail(email, subject, stripHtml(bodyHtml) || ' ', options);
     } else {
-      const bodyText = fillFirstNameInBody(asPlainText(bodyTemplate), firstName);
+      const bodyText = asPlainText(bodyWithPlaceholders);
       const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
       const options = file ? { attachments: [file.getAs(MimeType.PDF)] } : {};
       GmailApp.sendEmail(email, subject, bodyWithSig, options);
