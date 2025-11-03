@@ -167,10 +167,25 @@ function generatePDFBundleWithLabels() {
     return;
   }
 
-  // Create folder with timestamp
+  // Create folder with timestamp in the same location as the template
   const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HHmmss');
   const folderName = `PDF Bundle ${timestamp}`;
-  const folder = DriveApp.createFolder(folderName);
+
+  // Get the parent folder of the template document
+  const templateFile = DriveApp.getFileById(templateDoc.getId());
+  const templateParents = templateFile.getParents();
+
+  let folder;
+  if (templateParents.hasNext()) {
+    // Create the bundle folder in the same folder as the template
+    const templateFolder = templateParents.next();
+    folder = templateFolder.createFolder(folderName);
+    Logger.log('Created PDF bundle folder in: ' + templateFolder.getName());
+  } else {
+    // Fallback: create in root if template has no parent (shouldn't happen)
+    folder = DriveApp.createFolder(folderName);
+    Logger.log('Created PDF bundle folder in Drive root (template has no parent folder)');
+  }
 
   // Generate personalized PDFs
   let generatedCount = 0;
@@ -191,6 +206,11 @@ function generatePDFBundleWithLabels() {
   // Generate labels PDF
   const labelsPdfCreated = generateLabelsPDF(people, folderName, folder);
 
+  // Get template parent folder name for display
+  const templateFile = DriveApp.getFileById(templateDoc.getId());
+  const templateParents = templateFile.getParents();
+  const parentFolderName = templateParents.hasNext() ? templateParents.next().getName() : 'Drive Root';
+
   // Show completion message
   if (labelsPdfCreated) {
     ui.alert(
@@ -198,8 +218,10 @@ function generatePDFBundleWithLabels() {
       '✓ PDFs generated: ' + generatedCount + '\n' +
       '✓ Labels PDF: Created\n' +
       '✓ Total labels: ' + people.length + '\n\n' +
+      'Created in same folder as template:\n' +
+      '📁 ' + parentFolderName + '\n\n' +
       'Folder Name: ' + folderName + '\n' +
-      'Folder Location: ' + folder.getUrl() + '\n\n' +
+      'Folder URL: ' + folder.getUrl() + '\n\n' +
       'Files in folder:\n' +
       '• ' + generatedCount + ' personalized PDFs (one per person)\n' +
       '• Mailing Labels.pdf (print on Avery 5160 sheets)\n\n' +
@@ -210,6 +232,7 @@ function generatePDFBundleWithLabels() {
       'PDF Bundle Partially Created\n\n' +
       'PDFs generated: ' + generatedCount + '\n' +
       'Labels PDF: FAILED\n\n' +
+      'Created in: ' + parentFolderName + '\n' +
       'Folder: ' + folderName + '\n' +
       'Location: ' + folder.getUrl() + '\n\n' +
       'Check View → Logs for error details.'
