@@ -130,7 +130,10 @@ function replaceAllPlaceholders(template, personData) {
  * -> City/State/Zip: "Springfield, IL 62701"
  */
 function parseAddress(address) {
-  if (!address) return { line1: '', line2: '', cityStateZip: '' };
+  // Ensure we always return strings, never undefined
+  const emptyResult = { line1: '', line2: '', cityStateZip: '' };
+
+  if (!address) return emptyResult;
 
   const parts = address.split(',').map(p => p.trim()).filter(Boolean);
 

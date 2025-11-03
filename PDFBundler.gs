@@ -171,27 +171,52 @@ function generatePDFBundleWithLabels() {
  * Creates a personalized PDF from template for one person
  */
 function createPersonalizedPDF(templateDoc, personData) {
-  // Make a temporary copy of the template
-  const tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy('temp_' + personData.fullName);
-  const tempDoc = DocumentApp.openById(tempDocFile.getId());
-  const body = tempDoc.getBody();
+  let tempDocFile = null;
 
-  // Replace placeholders using replaceText (preserves formatting)
-  replacePlaceholdersInDocument(body, personData);
+  try {
+    // Log person data for debugging
+    Logger.log('Creating PDF for: ' + personData.fullName);
+    Logger.log('Person data: ' + JSON.stringify(personData));
 
-  // Remove empty paragraphs (from empty placeholders like ADDRESS LINE 2)
-  removeEmptyParagraphs(body);
+    // Make a temporary copy of the template
+    tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy('temp_' + personData.fullName);
+    const tempDoc = DocumentApp.openById(tempDocFile.getId());
+    const body = tempDoc.getBody();
 
-  // Save and close
-  tempDoc.saveAndClose();
+    // Replace placeholders using replaceText (preserves formatting)
+    replacePlaceholdersInDocument(body, personData);
 
-  // Export as PDF
-  const pdfBlob = tempDocFile.getAs('application/pdf');
+    // Remove empty paragraphs (from empty placeholders like ADDRESS LINE 2)
+    removeEmptyParagraphs(body);
 
-  // Delete the temporary doc
-  tempDocFile.setTrashed(true);
+    // Save and close
+    tempDoc.saveAndClose();
 
-  return pdfBlob;
+    // Export as PDF
+    const pdfBlob = tempDocFile.getAs('application/pdf');
+
+    // Delete the temporary doc
+    tempDocFile.setTrashed(true);
+
+    Logger.log('Successfully created PDF for: ' + personData.fullName);
+    return pdfBlob;
+
+  } catch (e) {
+    Logger.log('Error in createPersonalizedPDF for ' + personData.fullName + ': ' + e.message);
+    Logger.log('Stack: ' + e.stack);
+
+    // Clean up temp file if it exists
+    if (tempDocFile) {
+      try {
+        tempDocFile.setTrashed(true);
+      } catch (cleanupError) {
+        Logger.log('Could not clean up temp file: ' + cleanupError.message);
+      }
+    }
+
+    // Re-throw the error so it's caught by the caller
+    throw e;
+  }
 }
 
 /**
@@ -251,7 +276,20 @@ function replacePlaceholdersInDocument(body, personData) {
 
   // Replace all patterns: [PLACEHOLDER], <PLACEHOLDER>, {{PLACEHOLDER}}
   Object.keys(replacements).forEach(key => {
-    const value = replacements[key];
+    let value = replacements[key];
+
+    // Ensure value is a string (not undefined/null)
+    if (value === null || value === undefined) {
+      value = '';
+    }
+
+    // Convert to string
+    value = String(value);
+
+    // Escape special regex characters in the replacement value
+    // Google Docs replaceText treats $ specially
+    value = value.replace(/\$/g, '$$$$');
+
     // [PLACEHOLDER] format (case insensitive)
     body.replaceText('\\[\\s*' + key + '\\s*\\]', value);
     body.replaceText('\\[\\s*' + key.toLowerCase() + '\\s*\\]', value);
