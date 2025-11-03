@@ -43,6 +43,9 @@ function generatePDFBundleWithLabels() {
     return;
   }
 
+  // Show what file was found in C2
+  Logger.log('Template reference from email details C2: ' + attachmentRef);
+
   // Debug: Extract and show the file ID
   const fileId = extractDriveId(attachmentRef);
   if (!fileId) {
@@ -52,16 +55,37 @@ function generatePDFBundleWithLabels() {
     return;
   }
 
+  Logger.log('Extracted file ID: ' + fileId);
+
   let templateDoc;
+  let templateFileName = '';
   try {
     templateDoc = DocumentApp.openById(fileId);
+    templateFileName = DriveApp.getFileById(fileId).getName();
+    Logger.log('Successfully opened template document: ' + templateFileName);
+
+    // Confirm with user
+    const confirm = ui.alert(
+      'Confirm Template Document',
+      'Using template: ' + templateFileName + '\n\n' +
+      'File ID: ' + fileId + '\n\n' +
+      'Is this correct?',
+      ui.ButtonSet.YES_NO
+    );
+
+    if (confirm === ui.Button.NO) {
+      ui.alert('Cancelled. Please update cell C2 in "email details" sheet with the correct Google Doc template URL.');
+      return;
+    }
+
   } catch (e) {
     ui.alert('Error: Cannot open document with ID: ' + fileId + '\n\n' +
              'Error message: ' + e.message + '\n\n' +
              'Make sure:\n' +
              '1. The file is a Google Doc (not PDF)\n' +
              '2. You have access to the file\n' +
-             '3. The file ID is correct');
+             '3. The file ID is correct\n\n' +
+             'Currently in cell C2: ' + attachmentRef);
     return;
   }
 
@@ -268,6 +292,12 @@ function replacePlaceholdersInDocument(body, personData) {
 
   // Current date
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy');
+
+  Logger.log('Replacement values for ' + personData.fullName + ':');
+  Logger.log('- DATE: ' + today);
+  Logger.log('- ADDRESS LINE 1: ' + addressLines.line1);
+  Logger.log('- ADDRESS LINE 2: ' + addressLines.line2);
+  Logger.log('- CITY STATE ZIP: ' + addressLines.cityStateZip);
 
   // Define all replacements
   const replacements = {
