@@ -238,11 +238,14 @@ function createPersonalizedPDF(templateDoc, personData) {
     // Replace placeholders using replaceText (preserves formatting)
     replacePlaceholdersInDocument(body, personData);
 
-    // Remove empty paragraphs (from empty placeholders like ADDRESS LINE 2)
-    removeEmptyParagraphs(body);
-
-    // Save and close
+    // First save to commit changes
     tempDoc.saveAndClose();
+
+    // Reopen and aggressively remove empty lines
+    const tempDoc2 = DocumentApp.openById(tempDocFile.getId());
+    const body2 = tempDoc2.getBody();
+    removeEmptyLines(body2);
+    tempDoc2.saveAndClose();
 
     // Export as PDF
     const pdfBlob = tempDocFile.getAs('application/pdf');
@@ -272,43 +275,45 @@ function createPersonalizedPDF(templateDoc, personData) {
 }
 
 /**
- * Removes empty paragraphs from document body
- * (Happens when placeholders like [ADDRESS LINE 2] are replaced with empty string)
+ * Aggressively removes empty lines from document
  */
-function removeEmptyParagraphs(body) {
-  const numChildren = body.getNumChildren();
-  const emptyParagraphs = [];
+function removeEmptyLines(body) {
+  let removed = 0;
+  let attempts = 0;
+  const maxAttempts = 10; // Prevent infinite loop
 
-  // Find all empty paragraphs
-  for (let i = 0; i < numChildren; i++) {
-    const child = body.getChild(i);
+  // Keep removing until no more empty paragraphs found
+  while (attempts < maxAttempts) {
+    attempts++;
+    let foundEmpty = false;
 
-    if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
-      const para = child.asParagraph();
+    const paragraphs = body.getParagraphs();
+
+    // Need at least 2 paragraphs to remove one
+    if (paragraphs.length <= 1) break;
+
+    // Iterate backwards through paragraphs
+    for (let i = paragraphs.length - 1; i >= 0; i--) {
+      const para = paragraphs[i];
       const text = para.getText().trim();
 
-      // Mark paragraph for removal if it's empty or only whitespace
-      if (text === '') {
-        emptyParagraphs.push(i);
+      // If paragraph is empty and we have more than 1 paragraph, remove it
+      if (text === '' && paragraphs.length > 1) {
+        try {
+          para.removeFromParent();
+          removed++;
+          foundEmpty = true;
+        } catch (e) {
+          Logger.log('Could not remove empty paragraph: ' + e.message);
+        }
       }
     }
+
+    // If no empty paragraphs found, we're done
+    if (!foundEmpty) break;
   }
 
-  // Remove empty paragraphs (iterate backwards)
-  // Keep at least one paragraph (Google Docs requirement)
-  const totalParagraphs = body.getParagraphs().length;
-  const canRemove = Math.min(emptyParagraphs.length, totalParagraphs - 1);
-
-  for (let i = 0; i < canRemove; i++) {
-    const index = emptyParagraphs[i];
-    try {
-      const child = body.getChild(index);
-      body.removeChild(child);
-    } catch (e) {
-      // Skip if already removed or can't remove
-      Logger.log('Could not remove paragraph at index ' + index + ': ' + e.message);
-    }
-  }
+  Logger.log('Removed ' + removed + ' empty lines in ' + attempts + ' attempts');
 }
 
 /**
@@ -318,11 +323,13 @@ function replacePlaceholdersInDocument(body, personData) {
   // Parse address into lines if provided
   const addressLines = parseAddress(personData.address || '');
 
-  // Current date
+  // Current date in multiple formats
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy');
+  const todayFormatted = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM dd, yyyy'); // With leading zero
 
   Logger.log('Replacement values for ' + personData.fullName + ':');
   Logger.log('- DATE: ' + today);
+  Logger.log('- Month DD, YYYY: ' + todayFormatted);
   Logger.log('- ADDRESS LINE 1: ' + addressLines.line1);
   Logger.log('- ADDRESS LINE 2: ' + addressLines.line2);
   Logger.log('- CITY STATE ZIP: ' + addressLines.cityStateZip);
@@ -346,7 +353,9 @@ function replacePlaceholdersInDocument(body, personData) {
     'CITYSTATEZIP': addressLines.cityStateZip,
     'ADDRESS': personData.address || '',
     'DATE': today,
-    'TODAY': today
+    'TODAY': today,
+    'MONTH DD, YYYY': todayFormatted,
+    'Month DD, YYYY': todayFormatted  // Exact match for template
   };
 
   // Replace all patterns: [PLACEHOLDER], <PLACEHOLDER>, {{PLACEHOLDER}}
