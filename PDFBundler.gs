@@ -225,19 +225,36 @@ function createPersonalizedPDF(templateDoc, personData) {
  */
 function removeEmptyParagraphs(body) {
   const numChildren = body.getNumChildren();
+  const emptyParagraphs = [];
 
-  // Iterate backwards so we can safely remove elements
-  for (let i = numChildren - 1; i >= 0; i--) {
+  // Find all empty paragraphs
+  for (let i = 0; i < numChildren; i++) {
     const child = body.getChild(i);
 
     if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
       const para = child.asParagraph();
       const text = para.getText().trim();
 
-      // Remove paragraph if it's empty or only whitespace
+      // Mark paragraph for removal if it's empty or only whitespace
       if (text === '') {
-        body.removeChild(child);
+        emptyParagraphs.push(i);
       }
+    }
+  }
+
+  // Remove empty paragraphs (iterate backwards)
+  // Keep at least one paragraph (Google Docs requirement)
+  const totalParagraphs = body.getParagraphs().length;
+  const canRemove = Math.min(emptyParagraphs.length, totalParagraphs - 1);
+
+  for (let i = 0; i < canRemove; i++) {
+    const index = emptyParagraphs[i];
+    try {
+      const child = body.getChild(index);
+      body.removeChild(child);
+    } catch (e) {
+      // Skip if already removed or can't remove
+      Logger.log('Could not remove paragraph at index ' + index + ': ' + e.message);
     }
   }
 }

@@ -31,7 +31,24 @@ function toTitleCase(str) {
   // Words that should stay lowercase (unless first word)
   const lowercase = ['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'via'];
 
+  // US State abbreviations (should stay uppercase)
+  const stateAbbreviations = [
+    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
+    'DC', 'PR', 'VI', 'GU', 'AS', 'MP'
+  ];
+
   return str.toLowerCase().replace(/\b\w+/g, function(word, index) {
+    const upperWord = word.toUpperCase();
+
+    // Keep state abbreviations uppercase
+    if (stateAbbreviations.indexOf(upperWord) !== -1) {
+      return upperWord;
+    }
+
     // Always capitalize first word
     if (index === 0) {
       return word.charAt(0).toUpperCase() + word.slice(1);
