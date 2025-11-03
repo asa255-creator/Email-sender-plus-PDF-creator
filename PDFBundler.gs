@@ -43,49 +43,77 @@ function generatePDFBundleWithLabels() {
     return;
   }
 
-  // Show what file was found in C2
+  // Show what's actually in C2 (raw value)
+  ui.alert('Step 1: Checking Template File\n\n' +
+           'Value in "email details" sheet, cell C2:\n' +
+           attachmentRef.substring(0, 100) + (attachmentRef.length > 100 ? '...' : '') + '\n\n' +
+           'Extracting file ID...');
+
   Logger.log('Template reference from email details C2: ' + attachmentRef);
 
-  // Debug: Extract and show the file ID
+  // Extract the file ID
   const fileId = extractDriveId(attachmentRef);
   if (!fileId) {
-    ui.alert('Error: Could not extract file ID from C2.\n\nValue in C2: ' + attachmentRef + '\n\nPlease use one of these formats:\n' +
-             '• Full Drive URL: https://drive.google.com/file/d/FILE_ID/view\n' +
+    ui.alert('Error: Could not extract file ID from C2.\n\n' +
+             'Value in C2: ' + attachmentRef + '\n\n' +
+             'Please use one of these formats:\n' +
+             '• Full Drive URL: https://docs.google.com/document/d/FILE_ID/edit\n' +
              '• Just the file ID: 1a2b3c4d5e6f7g8h9i0j');
     return;
   }
 
   Logger.log('Extracted file ID: ' + fileId);
 
-  let templateDoc;
+  // Get the actual file name from Drive FIRST (before opening)
   let templateFileName = '';
+  let fileType = '';
+  try {
+    const driveFile = DriveApp.getFileById(fileId);
+    templateFileName = driveFile.getName();
+    fileType = driveFile.getMimeType();
+    Logger.log('Found file in Drive: ' + templateFileName + ' (type: ' + fileType + ')');
+  } catch (e) {
+    ui.alert('Error: Cannot access file with ID: ' + fileId + '\n\n' +
+             'Error: ' + e.message + '\n\n' +
+             'Make sure you have access to this file.');
+    return;
+  }
+
+  // Check if it's actually a Google Doc
+  if (fileType !== 'application/vnd.google-apps.document') {
+    ui.alert('Error: Wrong file type!\n\n' +
+             'File name: ' + templateFileName + '\n' +
+             'File type: ' + fileType + '\n\n' +
+             'This is NOT a Google Doc. Please use a Google Docs document as the template.');
+    return;
+  }
+
+  // Now confirm with user using the actual document name
+  const confirm = ui.alert(
+    'Step 2: Confirm Template Document',
+    'Found this Google Doc:\n\n' +
+    '📄 Document Name: ' + templateFileName + '\n\n' +
+    'File ID: ' + fileId + '\n\n' +
+    'Is "' + templateFileName + '" the correct template?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirm === ui.Button.NO) {
+    ui.alert('Cancelled.\n\n' +
+             'Please update cell C2 in "email details" sheet with the correct Google Doc URL.\n\n' +
+             'Currently has: ' + templateFileName);
+    return;
+  }
+
+  // Finally, open the document
+  let templateDoc;
   try {
     templateDoc = DocumentApp.openById(fileId);
-    templateFileName = DriveApp.getFileById(fileId).getName();
     Logger.log('Successfully opened template document: ' + templateFileName);
-
-    // Confirm with user
-    const confirm = ui.alert(
-      'Confirm Template Document',
-      'Using template: ' + templateFileName + '\n\n' +
-      'File ID: ' + fileId + '\n\n' +
-      'Is this correct?',
-      ui.ButtonSet.YES_NO
-    );
-
-    if (confirm === ui.Button.NO) {
-      ui.alert('Cancelled. Please update cell C2 in "email details" sheet with the correct Google Doc template URL.');
-      return;
-    }
-
   } catch (e) {
-    ui.alert('Error: Cannot open document with ID: ' + fileId + '\n\n' +
-             'Error message: ' + e.message + '\n\n' +
-             'Make sure:\n' +
-             '1. The file is a Google Doc (not PDF)\n' +
-             '2. You have access to the file\n' +
-             '3. The file ID is correct\n\n' +
-             'Currently in cell C2: ' + attachmentRef);
+    ui.alert('Error: Cannot open document\n\n' +
+             'Document: ' + templateFileName + '\n' +
+             'Error: ' + e.message);
     return;
   }
 
