@@ -241,11 +241,21 @@ function parseAddress(address) {
  */
 function extractFirstName(fullName) {
   let s = fullName.replace(/["']/g, '').replace(/\(.*?\)/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // Remove titles
   s = s.replace(/^(mr|mrs|ms|miss|mx|dr|prof)\.\s+/i, '');
+
+  // Remove suffixes like Jr., Sr., II, III, IV, etc. (they come after commas)
+  const suffixes = /,\s*(jr\.?|sr\.?|ii|iii|iv|v|esq\.?|phd\.?|md\.?)$/i;
+  s = s.replace(suffixes, '');
+
+  // Now handle "Last, First" format
   if (s.includes(',')) {
     const parts = s.split(',').map(t => t.trim()).filter(Boolean);
-    if (parts.length > 1) s = parts[1];
+    if (parts.length > 1) s = parts[1]; // Take the part after comma (First name)
   }
+
+  // Return first word of whatever remains
   return (s.split(/\s+/)[0] || '').trim();
 }
 
