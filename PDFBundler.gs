@@ -206,10 +206,8 @@ function generatePDFBundleWithLabels() {
   // Generate labels PDF
   const labelsPdfCreated = generateLabelsPDF(people, folderName, folder);
 
-  // Get template parent folder name for display
-  const templateFile = DriveApp.getFileById(templateDoc.getId());
-  const templateParents = templateFile.getParents();
-  const parentFolderName = templateParents.hasNext() ? templateParents.next().getName() : 'Drive Root';
+  // Get template parent folder name for display (reuse templateFile from above)
+  const parentFolderName = folder.getParents().hasNext() ? folder.getParents().next().getName() : 'Drive Root';
 
   // Show completion message
   if (labelsPdfCreated) {
