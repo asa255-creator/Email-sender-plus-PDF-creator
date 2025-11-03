@@ -179,6 +179,9 @@ function createPersonalizedPDF(templateDoc, personData) {
   // Replace placeholders using replaceText (preserves formatting)
   replacePlaceholdersInDocument(body, personData);
 
+  // Remove empty paragraphs (from empty placeholders like ADDRESS LINE 2)
+  removeEmptyParagraphs(body);
+
   // Save and close
   tempDoc.saveAndClose();
 
@@ -189,6 +192,29 @@ function createPersonalizedPDF(templateDoc, personData) {
   tempDocFile.setTrashed(true);
 
   return pdfBlob;
+}
+
+/**
+ * Removes empty paragraphs from document body
+ * (Happens when placeholders like [ADDRESS LINE 2] are replaced with empty string)
+ */
+function removeEmptyParagraphs(body) {
+  const numChildren = body.getNumChildren();
+
+  // Iterate backwards so we can safely remove elements
+  for (let i = numChildren - 1; i >= 0; i--) {
+    const child = body.getChild(i);
+
+    if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      const para = child.asParagraph();
+      const text = para.getText().trim();
+
+      // Remove paragraph if it's empty or only whitespace
+      if (text === '') {
+        body.removeChild(child);
+      }
+    }
+  }
 }
 
 /**
@@ -215,6 +241,9 @@ function replacePlaceholdersInDocument(body, personData) {
     'ORGANIZATION': personData.pacName || '',
     'ADDRESS LINE 1': addressLines.line1,
     'ADDRESS LINE 2': addressLines.line2,
+    'CITY STATE ZIP': addressLines.cityStateZip,
+    'CITY, STATE ZIP': addressLines.cityStateZip,
+    'CITYSTATEZIP': addressLines.cityStateZip,
     'ADDRESS': personData.address || '',
     'DATE': today,
     'TODAY': today

@@ -95,9 +95,12 @@ function replaceAllPlaceholders(template, personData) {
     'ORGANIZATION NAME': personData.pacName || '',
     'ORGANIZATION': personData.pacName || '',
 
-    // Address
+    // Address (3-line format)
     'ADDRESS LINE 1': addressLines.line1,
     'ADDRESS LINE 2': addressLines.line2,
+    'CITY STATE ZIP': addressLines.cityStateZip,
+    'CITY, STATE ZIP': addressLines.cityStateZip,
+    'CITYSTATEZIP': addressLines.cityStateZip,
     'ADDRESS': personData.address || '',
 
     // Date
@@ -120,27 +123,94 @@ function replaceAllPlaceholders(template, personData) {
 }
 
 /**
- * Parses address into two lines
- * Example: "123 Main St, Apt 4B, City, ST 12345" -> Line 1: "123 Main St, Apt 4B", Line 2: "City, ST 12345"
+ * Parses address into three lines
+ * Example: "123 Main St, Apt 4B, Springfield, IL 62701"
+ * -> Line 1: "123 Main St"
+ * -> Line 2: "Apt 4B"
+ * -> City/State/Zip: "Springfield, IL 62701"
  */
 function parseAddress(address) {
-  if (!address) return { line1: '', line2: '' };
+  if (!address) return { line1: '', line2: '', cityStateZip: '' };
 
   const parts = address.split(',').map(p => p.trim()).filter(Boolean);
 
-  if (parts.length <= 1) {
-    return { line1: address, line2: '' };
+  if (parts.length === 0) {
+    return { line1: '', line2: '', cityStateZip: '' };
+  }
+
+  if (parts.length === 1) {
+    // Just one part - treat as street address
+    return { line1: parts[0], line2: '', cityStateZip: '' };
   }
 
   if (parts.length === 2) {
-    return { line1: parts[0], line2: parts[1] };
+    // Two parts: Could be "Street City, State Zip" or "Street, City State Zip"
+    // Check if second part is just "State Zip" (e.g., "KY 40513")
+    const stateZipPattern = /^([A-Z]{2})\s+(\d{5}(-\d{4})?)$/i;
+    const match = parts[1].match(stateZipPattern);
+
+    if (match) {
+      // Second part is just "State Zip", need to extract city from first part
+      // Example: "1066 Wellington Way Lexington, KY 40513"
+      const firstPart = parts[0];
+      const words = firstPart.split(/\s+/);
+
+      if (words.length >= 2) {
+        // Assume last word(s) of first part is the city
+        // Typically: "Street Number Street Name City"
+        // Split: take last 1-2 words as city, rest as street
+        const city = words[words.length - 1]; // Last word is likely city
+        const street = words.slice(0, -1).join(' ');
+        const cityStateZip = city + ', ' + parts[1];
+
+        return { line1: street, line2: '', cityStateZip: cityStateZip };
+      }
+    }
+
+    // Default: "Street, City State Zip"
+    return { line1: parts[0], line2: '', cityStateZip: parts[1] };
   }
 
-  // 3+ parts: assume last part is "City, ST ZIP", everything before is address
-  const line2 = parts.slice(-2).join(', '); // Last two parts (City, State ZIP)
-  const line1 = parts.slice(0, -2).join(', '); // Everything before
+  // 3+ parts: "Street, Apt/Suite, City, State Zip" or similar
+  // Last part is likely city/state/zip
+  // Second to last might be part of city name (e.g., "New York, NY")
 
-  return { line1, line2 };
+  // Check if last part looks like just a state + zip (e.g., "NY 10001")
+  const lastPart = parts[parts.length - 1];
+  const secondLastPart = parts[parts.length - 2];
+
+  // Pattern: State abbreviation (2 letters) + space + 5 digits
+  const stateZipPattern = /^[A-Z]{2}\s+\d{5}(-\d{4})?$/i;
+
+  if (stateZipPattern.test(lastPart) && parts.length >= 3) {
+    // Format: "..., City, ST ZIP"
+    const cityStateZip = secondLastPart + ', ' + lastPart;
+    const addressParts = parts.slice(0, -2);
+
+    if (addressParts.length === 1) {
+      return { line1: addressParts[0], line2: '', cityStateZip: cityStateZip };
+    } else {
+      return {
+        line1: addressParts[0],
+        line2: addressParts.slice(1).join(', '),
+        cityStateZip: cityStateZip
+      };
+    }
+  }
+
+  // Default: last part is city/state/zip, everything before is address
+  const cityStateZip = parts[parts.length - 1];
+  const addressParts = parts.slice(0, -1);
+
+  if (addressParts.length === 1) {
+    return { line1: addressParts[0], line2: '', cityStateZip: cityStateZip };
+  } else {
+    return {
+      line1: addressParts[0],
+      line2: addressParts.slice(1).join(', '),
+      cityStateZip: cityStateZip
+    };
+  }
 }
 
 /** ========================== NAME PROCESSING (Legacy) ========= **/
