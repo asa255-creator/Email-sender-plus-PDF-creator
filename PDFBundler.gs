@@ -296,45 +296,53 @@ function createPersonalizedPDF(templateDoc, personData) {
 }
 
 /**
- * Aggressively removes empty lines from document
+ * Removes only lines marked for removal (from empty placeholders)
+ * Preserves intentional blank lines in the template
  */
 function removeEmptyLines(body) {
   let removed = 0;
   let attempts = 0;
   const maxAttempts = 10; // Prevent infinite loop
+  const marker = '%%REMOVE_THIS_LINE%%';
 
-  // Keep removing until no more empty paragraphs found
+  // Keep removing until no more marked lines found
   while (attempts < maxAttempts) {
     attempts++;
-    let foundEmpty = false;
+    let foundMarked = false;
 
     const paragraphs = body.getParagraphs();
 
-    // Need at least 2 paragraphs to remove one
-    if (paragraphs.length <= 1) break;
+    // Need at least 1 paragraph to work with
+    if (paragraphs.length === 0) break;
 
     // Iterate backwards through paragraphs
     for (let i = paragraphs.length - 1; i >= 0; i--) {
       const para = paragraphs[i];
-      const text = para.getText().trim();
+      const text = para.getText();
 
-      // If paragraph is empty and we have more than 1 paragraph, remove it
-      if (text === '' && paragraphs.length > 1) {
+      // Only remove paragraphs that contain our marker
+      // This preserves intentional blank lines from the template
+      if (text.includes(marker)) {
         try {
-          para.removeFromParent();
+          // If this is the only paragraph, clear it instead of removing
+          if (paragraphs.length === 1) {
+            para.clear();
+          } else {
+            para.removeFromParent();
+          }
           removed++;
-          foundEmpty = true;
+          foundMarked = true;
         } catch (e) {
-          Logger.log('Could not remove empty paragraph: ' + e.message);
+          Logger.log('Could not remove marked paragraph: ' + e.message);
         }
       }
     }
 
-    // If no empty paragraphs found, we're done
-    if (!foundEmpty) break;
+    // If no marked paragraphs found, we're done
+    if (!foundMarked) break;
   }
 
-  Logger.log('Removed ' + removed + ' empty lines in ' + attempts + ' attempts');
+  Logger.log('Removed ' + removed + ' empty placeholder lines (kept intentional blank lines)');
 }
 
 /**
@@ -391,9 +399,15 @@ function replacePlaceholdersInDocument(body, personData) {
     // Convert to string
     value = String(value);
 
-    // Escape special regex characters in the replacement value
-    // Google Docs replaceText treats $ specially
-    value = value.replace(/\$/g, '$$$$');
+    // If value is empty, use a special marker so we can remove just those lines
+    // This preserves intentional blank lines in the template
+    if (value === '') {
+      value = '%%REMOVE_THIS_LINE%%';
+    } else {
+      // Escape special regex characters in the replacement value
+      // Google Docs replaceText treats $ specially
+      value = value.replace(/\$/g, '$$$$');
+    }
 
     // [PLACEHOLDER] format (case insensitive)
     body.replaceText('\\[\\s*' + key + '\\s*\\]', value);
