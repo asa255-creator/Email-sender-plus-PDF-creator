@@ -398,6 +398,8 @@ function replacePlaceholdersInDocument(body, personData) {
   };
 
   // Replace all patterns: [PLACEHOLDER], <PLACEHOLDER>, {{PLACEHOLDER}}
+  // The template structure is preserved - if placeholders are on separate lines in the template,
+  // they'll stay on separate lines after replacement
   Object.keys(replacements).forEach(key => {
     let value = replacements[key];
 
@@ -414,11 +416,6 @@ function replacePlaceholdersInDocument(body, personData) {
     if (value === '') {
       value = '%%REMOVE_THIS_LINE%%';
     } else {
-      // Special handling for ADDRESS LINE 2: add line break to prevent merging with next line
-      if (key === 'ADDRESS LINE 2') {
-        value = value + '\n';
-      }
-
       // Escape special regex characters in the replacement value
       // Google Docs replaceText treats $ specially
       value = value.replace(/\$/g, '$$$$');
