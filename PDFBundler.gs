@@ -203,6 +203,9 @@ function generatePDFBundleWithLabels() {
     }
   });
 
+  // Generate combined PDF with all letters
+  const combinedPdfCreated = generateCombinedPDF(templateDoc, people, folderName, folder);
+
   // Generate labels PDF
   const labelsPdfCreated = generateLabelsPDF(people, folderName, folder);
 
@@ -210,26 +213,32 @@ function generatePDFBundleWithLabels() {
   const parentFolderName = folder.getParents().hasNext() ? folder.getParents().next().getName() : 'Drive Root';
 
   // Show completion message
-  if (labelsPdfCreated) {
+  if (labelsPdfCreated && combinedPdfCreated) {
     ui.alert(
       'PDF Bundle Created Successfully!\n\n' +
-      '✓ PDFs generated: ' + generatedCount + '\n' +
+      '✓ Individual PDFs: ' + generatedCount + '\n' +
+      '✓ Combined PDF: Created\n' +
       '✓ Labels PDF: Created\n' +
-      '✓ Total labels: ' + people.length + '\n\n' +
+      '✓ Total people: ' + people.length + '\n\n' +
       'Created in same folder as template:\n' +
       '📁 ' + parentFolderName + '\n\n' +
       'Folder Name: ' + folderName + '\n' +
       'Folder URL: ' + folder.getUrl() + '\n\n' +
       'Files in folder:\n' +
       '• ' + generatedCount + ' personalized PDFs (one per person)\n' +
+      '• Combined Letters.pdf (all letters in one file)\n' +
       '• Mailing Labels.pdf (print on Avery 5160 sheets)\n\n' +
       'Click the folder URL above to open it.'
     );
   } else {
+    const warnings = [];
+    if (!combinedPdfCreated) warnings.push('Combined PDF: FAILED');
+    if (!labelsPdfCreated) warnings.push('Labels PDF: FAILED');
+
     ui.alert(
       'PDF Bundle Partially Created\n\n' +
-      'PDFs generated: ' + generatedCount + '\n' +
-      'Labels PDF: FAILED\n\n' +
+      'Individual PDFs: ' + generatedCount + '\n' +
+      (warnings.length > 0 ? warnings.join('\n') + '\n\n' : '') +
       'Created in: ' + parentFolderName + '\n' +
       'Folder: ' + folderName + '\n' +
       'Location: ' + folder.getUrl() + '\n\n' +
@@ -364,6 +373,7 @@ function replacePlaceholdersInDocument(body, personData) {
   Logger.log('- CITY STATE ZIP: ' + addressLines.cityStateZip);
 
   // Define all replacements
+  // Note: ADDRESS LINE 2 gets special handling to ensure proper line breaks
   const replacements = {
     'FIRST NAME': personData.firstName || '',
     'FIRSTNAME': personData.firstName || '',
@@ -376,7 +386,7 @@ function replacePlaceholdersInDocument(body, personData) {
     'ORGANIZATION NAME': personData.pacName || '',
     'ORGANIZATION': personData.pacName || '',
     'ADDRESS LINE 1': addressLines.line1,
-    'ADDRESS LINE 2': addressLines.line2,
+    'ADDRESS LINE 2': addressLines.line2,  // Will be handled specially below
     'CITY STATE ZIP': addressLines.cityStateZip,
     'CITY, STATE ZIP': addressLines.cityStateZip,
     'CITYSTATEZIP': addressLines.cityStateZip,
@@ -555,6 +565,126 @@ function formatLabelCell(cell) {
   text.setFontSize(9);        // Slightly smaller for better fit
   text.setFontFamily('Arial');
   // Note: setLineSpacing() is not available on Text objects, only on Paragraphs
+}
+
+/** ========================== COMBINED PDF ==================== **/
+
+/**
+ * Generates a combined PDF with all personalized letters
+ * Each letter starts on a new page
+ */
+function generateCombinedPDF(templateDoc, people, folderName, folder) {
+  let tempDocFile = null;
+
+  try {
+    Logger.log('Creating combined PDF with ' + people.length + ' letters');
+
+    // Create a new Google Doc for the combined letters
+    const combinedDoc = DocumentApp.create('Temp Combined - ' + folderName);
+    const combinedBody = combinedDoc.getBody();
+
+    // Process each person and append their letter to the combined document
+    for (let i = 0; i < people.length; i++) {
+      const person = people[i];
+      Logger.log('Adding letter ' + (i + 1) + ' of ' + people.length + ' for: ' + person.fullName);
+
+      try {
+        // Create a temporary copy of the template for this person
+        tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy('temp_combined_' + person.fullName);
+        const tempDoc = DocumentApp.openById(tempDocFile.getId());
+        const tempBody = tempDoc.getBody();
+
+        // Replace placeholders
+        replacePlaceholdersInDocument(tempBody, person);
+        tempDoc.saveAndClose();
+
+        // Reopen and remove empty lines
+        const tempDoc2 = DocumentApp.openById(tempDocFile.getId());
+        const tempBody2 = tempDoc2.getBody();
+        removeEmptyLines(tempBody2);
+        tempDoc2.saveAndClose();
+
+        // Reopen to copy content to combined document
+        const tempDoc3 = DocumentApp.openById(tempDocFile.getId());
+        const finalBody = tempDoc3.getBody();
+
+        // Copy all content from this letter to the combined document
+        const numChildren = finalBody.getNumChildren();
+        for (let j = 0; j < numChildren; j++) {
+          const element = finalBody.getChild(j);
+          const elementType = element.getType();
+
+          // Copy the element to the combined document
+          if (elementType === DocumentApp.ElementType.PARAGRAPH) {
+            const para = element.asParagraph().copy();
+            combinedBody.appendParagraph(para);
+          } else if (elementType === DocumentApp.ElementType.TABLE) {
+            const table = element.asTable().copy();
+            combinedBody.appendTable(table);
+          } else if (elementType === DocumentApp.ElementType.LIST_ITEM) {
+            const listItem = element.asListItem().copy();
+            combinedBody.appendListItem(listItem);
+          }
+        }
+
+        tempDoc3.close();
+
+        // Add page break after this letter (except for the last one)
+        if (i < people.length - 1) {
+          combinedBody.appendPageBreak();
+        }
+
+        // Clean up temporary file
+        tempDocFile.setTrashed(true);
+        tempDocFile = null;
+
+      } catch (e) {
+        Logger.log('Error adding letter for ' + person.fullName + ': ' + e.message);
+        // Clean up temp file if it exists
+        if (tempDocFile) {
+          try {
+            tempDocFile.setTrashed(true);
+          } catch (cleanupError) {
+            // Ignore cleanup errors
+          }
+          tempDocFile = null;
+        }
+        // Continue with next person
+      }
+    }
+
+    // Save the combined document
+    combinedDoc.saveAndClose();
+
+    // Get the file and export as PDF
+    const combinedDocFile = DriveApp.getFileById(combinedDoc.getId());
+    const pdfBlob = combinedDocFile.getAs('application/pdf');
+
+    // Save PDF to folder
+    const pdfFile = folder.createFile(pdfBlob);
+    pdfFile.setName('Combined Letters.pdf');
+
+    // Delete temporary combined document
+    combinedDocFile.setTrashed(true);
+
+    Logger.log('Combined PDF created successfully with ' + people.length + ' letters');
+    return true;
+
+  } catch (e) {
+    Logger.log('Error generating combined PDF: ' + e.message);
+    Logger.log('Stack trace: ' + e.stack);
+
+    // Clean up any remaining temp file
+    if (tempDocFile) {
+      try {
+        tempDocFile.setTrashed(true);
+      } catch (cleanupError) {
+        Logger.log('Could not clean up temp file: ' + cleanupError.message);
+      }
+    }
+
+    return false;
+  }
 }
 
 /** ========================== HELPER MESSAGE ================== **/
