@@ -414,6 +414,11 @@ function replacePlaceholdersInDocument(body, personData) {
     if (value === '') {
       value = '%%REMOVE_THIS_LINE%%';
     } else {
+      // Special handling for ADDRESS LINE 2: add line break to prevent merging with next line
+      if (key === 'ADDRESS LINE 2') {
+        value = value + '\n';
+      }
+
       // Escape special regex characters in the replacement value
       // Google Docs replaceText treats $ specially
       value = value.replace(/\$/g, '$$$$');
