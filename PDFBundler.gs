@@ -267,14 +267,22 @@ function debugReplacementForOnePerson() {
   const listSh = ss.getSheetByName('People');
   const values = listSh.getRange(2, 1, listSh.getLastRow() - 1, 5).getDisplayValues();
 
+  Logger.log('=== CHECKING ALL ADDRESSES ===');
   let testPerson = null;
   for (let i = 0; i < values.length; i++) {
     const fullName = String(values[i][0] || '').trim();
     const address = String(values[i][4] || '').trim();
     if (fullName && address) {
       const addressLines = parseAddress(address);
-      if (addressLines.line2) {
+      Logger.log('\nPerson: ' + fullName);
+      Logger.log('  Raw address: "' + address + '"');
+      Logger.log('  Parsed line1: "' + addressLines.line1 + '"');
+      Logger.log('  Parsed line2: "' + addressLines.line2 + '"');
+      Logger.log('  Parsed cityStateZip: "' + addressLines.cityStateZip + '"');
+
+      if (addressLines.line2 && addressLines.line2.trim() !== '') {
         // Found someone with ADDRESS LINE 2
+        Logger.log('  ✓ HAS ADDRESS LINE 2 - Using this person for test');
         testPerson = {
           fullName: fullName,
           firstName: extractFirstName(fullName),
@@ -290,11 +298,11 @@ function debugReplacementForOnePerson() {
   }
 
   if (!testPerson) {
-    ui.alert('No person found with ADDRESS LINE 2');
+    ui.alert('No person found with ADDRESS LINE 2\n\nCheck View → Logs to see how all addresses were parsed.');
     return;
   }
 
-  Logger.log('Testing with: ' + testPerson.fullName);
+  Logger.log('\n=== TESTING WITH: ' + testPerson.fullName + ' ===');
   Logger.log('Address: ' + testPerson.address);
 
   // Create temp doc
