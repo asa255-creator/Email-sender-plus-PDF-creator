@@ -337,8 +337,13 @@ function replacePlaceholdersInDocument(body, personData) {
     'Month DD, YYYY': todayFormatted
   };
 
-  // Process each placeholder
-  Object.keys(replacements).forEach(key => {
+  // Process each placeholder in REVERSE order
+  // This ensures later placeholders (like CITY STATE ZIP) are processed before earlier ones (ADDRESS LINE 2)
+  // which may help preserve paragraph boundaries for consecutive placeholders
+  const keys = Object.keys(replacements);
+  keys.reverse();
+
+  keys.forEach(key => {
     let value = replacements[key];
 
     // Ensure value is a string
