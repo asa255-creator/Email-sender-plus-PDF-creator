@@ -368,9 +368,10 @@ function replacePlaceholdersInDocument(body, personData) {
   Logger.log('Replacement values for ' + personData.fullName + ':');
   Logger.log('- DATE: ' + today);
   Logger.log('- Month DD, YYYY: ' + todayFormatted);
-  Logger.log('- ADDRESS LINE 1: ' + addressLines.line1);
-  Logger.log('- ADDRESS LINE 2: ' + addressLines.line2);
-  Logger.log('- CITY STATE ZIP: ' + addressLines.cityStateZip);
+  Logger.log('- ADDRESS LINE 1: "' + addressLines.line1 + '"');
+  Logger.log('- ADDRESS LINE 2: "' + addressLines.line2 + '" (length: ' + addressLines.line2.length + ')');
+  Logger.log('- CITY STATE ZIP: "' + addressLines.cityStateZip + '"');
+  Logger.log('- Raw address from spreadsheet: "' + (personData.address || '') + '"');
 
   // Define all replacements
   // Note: ADDRESS LINE 2 gets special handling to ensure proper line breaks
