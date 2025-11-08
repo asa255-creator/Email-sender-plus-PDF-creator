@@ -247,6 +247,91 @@ function generatePDFBundleWithLabels() {
   }
 }
 
+/** ========================== DEBUG FUNCTION ================== **/
+
+/**
+ * DEBUG: Test replacement on ONE person and show document structure
+ * Run this from Script Editor to diagnose the issue
+ */
+function debugReplacementForOnePerson() {
+  const ss = SpreadsheetApp.getActive();
+  const ui = SpreadsheetApp.getUi();
+
+  // Get template
+  const detailsSh = ss.getSheetByName('email details');
+  const attachmentRef = String(detailsSh.getRange('C2').getValue()).trim();
+  const fileId = extractDriveId(attachmentRef);
+  const templateDoc = DocumentApp.openById(fileId);
+
+  // Get first person with ADDRESS LINE 2
+  const listSh = ss.getSheetByName('People');
+  const values = listSh.getRange(2, 1, listSh.getLastRow() - 1, 5).getDisplayValues();
+
+  let testPerson = null;
+  for (let i = 0; i < values.length; i++) {
+    const fullName = String(values[i][0] || '').trim();
+    const address = String(values[i][4] || '').trim();
+    if (fullName && address) {
+      const addressLines = parseAddress(address);
+      if (addressLines.line2) {
+        // Found someone with ADDRESS LINE 2
+        testPerson = {
+          fullName: fullName,
+          firstName: extractFirstName(fullName),
+          pacName: String(values[i][1] || '').trim(),
+          email: String(values[i][2] || '').trim(),
+          phone: String(values[i][3] || '').trim(),
+          address: address
+        };
+        testPerson = normalizePersonData(testPerson);
+        break;
+      }
+    }
+  }
+
+  if (!testPerson) {
+    ui.alert('No person found with ADDRESS LINE 2');
+    return;
+  }
+
+  Logger.log('Testing with: ' + testPerson.fullName);
+  Logger.log('Address: ' + testPerson.address);
+
+  // Create temp doc
+  const tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy('DEBUG_TEST_' + testPerson.fullName);
+  const tempDoc = DocumentApp.openById(tempDocFile.getId());
+  const body = tempDoc.getBody();
+
+  Logger.log('\n=== BEFORE REPLACEMENT ===');
+  const beforeParas = body.getParagraphs();
+  for (let i = 0; i < beforeParas.length; i++) {
+    Logger.log('Para ' + i + ': "' + beforeParas[i].getText() + '"');
+  }
+
+  // Do replacement
+  replacePlaceholdersInDocument(body, testPerson);
+  tempDoc.saveAndClose();
+
+  // Reopen and show result
+  const tempDoc2 = DocumentApp.openById(tempDocFile.getId());
+  const body2 = tempDoc2.getBody();
+
+  Logger.log('\n=== AFTER REPLACEMENT ===');
+  const afterParas = body2.getParagraphs();
+  for (let i = 0; i < afterParas.length; i++) {
+    Logger.log('Para ' + i + ': "' + afterParas[i].getText() + '"');
+  }
+
+  tempDoc2.close();
+
+  ui.alert('Debug complete!\n\n' +
+           'Testing: ' + testPerson.fullName + '\n' +
+           'Temp doc created: DEBUG_TEST_' + testPerson.fullName + '\n\n' +
+           'Check View → Logs for paragraph-by-paragraph output.\n' +
+           'Temp doc URL: ' + tempDocFile.getUrl() + '\n\n' +
+           'The temp doc was NOT deleted so you can inspect it manually.');
+}
+
 /** ========================== PDF GENERATION =================== **/
 
 /**
