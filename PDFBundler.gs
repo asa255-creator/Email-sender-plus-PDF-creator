@@ -374,7 +374,6 @@ function replacePlaceholdersInDocument(body, personData) {
   Logger.log('- Raw address from spreadsheet: "' + (personData.address || '') + '"');
 
   // Define all replacements
-  // Note: ADDRESS LINE 2 gets special handling to ensure proper line breaks
   const replacements = {
     'FIRST NAME': personData.firstName || '',
     'FIRSTNAME': personData.firstName || '',
@@ -387,7 +386,7 @@ function replacePlaceholdersInDocument(body, personData) {
     'ORGANIZATION NAME': personData.pacName || '',
     'ORGANIZATION': personData.pacName || '',
     'ADDRESS LINE 1': addressLines.line1,
-    'ADDRESS LINE 2': addressLines.line2,  // Will be handled specially below
+    'ADDRESS LINE 2': addressLines.line2,
     'CITY STATE ZIP': addressLines.cityStateZip,
     'CITY, STATE ZIP': addressLines.cityStateZip,
     'CITYSTATEZIP': addressLines.cityStateZip,
@@ -395,12 +394,10 @@ function replacePlaceholdersInDocument(body, personData) {
     'DATE': today,
     'TODAY': today,
     'MONTH DD, YYYY': todayFormatted,
-    'Month DD, YYYY': todayFormatted  // Exact match for template
+    'Month DD, YYYY': todayFormatted
   };
 
-  // Replace all patterns: [PLACEHOLDER], <PLACEHOLDER>, {{PLACEHOLDER}}
-  // The template structure is preserved - if placeholders are on separate lines in the template,
-  // they'll stay on separate lines after replacement
+  // Replace placeholders using element-level manipulation to preserve all line breaks
   Object.keys(replacements).forEach(key => {
     let value = replacements[key];
 
@@ -413,24 +410,44 @@ function replacePlaceholdersInDocument(body, personData) {
     value = String(value);
 
     // If value is empty, use a special marker so we can remove just those lines
-    // This preserves intentional blank lines in the template
     if (value === '') {
       value = '%%REMOVE_THIS_LINE%%';
     } else {
-      // Escape special regex characters in the replacement value
-      // Google Docs replaceText treats $ specially
+      // Escape $ for Google Docs replaceText
       value = value.replace(/\$/g, '$$$$');
     }
 
-    // [PLACEHOLDER] format (case insensitive)
-    body.replaceText('\\[\\s*' + key + '\\s*\\]', value);
-    body.replaceText('\\[\\s*' + key.toLowerCase() + '\\s*\\]', value);
-    // <PLACEHOLDER> format (case insensitive)
-    body.replaceText('<\\s*' + key + '\\s*>', value);
-    body.replaceText('<\\s*' + key.toLowerCase() + '\\s*>', value);
-    // {{PLACEHOLDER}} format (case insensitive)
-    body.replaceText('\\{\\{\\s*' + key + '\\s*\\}\\}', value);
-    body.replaceText('\\{\\{\\s*' + key.toLowerCase() + '\\s*\\}\\}', value);
+    // Create regex patterns for different placeholder formats
+    const patterns = [
+      '\\[\\s*' + key + '\\s*\\]',
+      '\\[\\s*' + key.toLowerCase() + '\\s*\\]',
+      '<\\s*' + key + '\\s*>',
+      '<\\s*' + key.toLowerCase() + '\\s*>',
+      '\\{\\{\\s*' + key + '\\s*\\}\\}',
+      '\\{\\{\\s*' + key.toLowerCase() + '\\s*\\}\\}'
+    ];
+
+    // For each pattern, find and replace while preserving document structure
+    patterns.forEach(pattern => {
+      // Use findText to locate occurrences
+      let searchResult = body.findText(pattern);
+      while (searchResult !== null) {
+        const foundElement = searchResult.getElement();
+        const startOffset = searchResult.getStartOffset();
+        const endOffset = searchResult.getEndOffsetInclusive();
+
+        // Get the text element
+        const textElement = foundElement.asText();
+
+        // Replace this specific occurrence
+        // This preserves the element structure and all formatting/breaks
+        textElement.deleteText(startOffset, endOffset);
+        textElement.insertText(startOffset, value);
+
+        // Continue searching after this replacement
+        searchResult = body.findText(pattern, searchResult);
+      }
+    });
   });
 }
 
