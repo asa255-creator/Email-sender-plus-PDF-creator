@@ -381,7 +381,13 @@ function replacePlaceholdersInDocument(body, personData) {
           break;
         } else {
           // Has value - replace the placeholder text
-          const escapedValue = value.replace(/\$/g, '$$$$');
+          let escapedValue = value.replace(/\$/g, '$$$$');
+
+          // Special handling for ADDRESS LINE 2 - add newline to force separation
+          if (key === 'ADDRESS LINE 2') {
+            escapedValue = escapedValue + '\n';
+          }
+
           body.replaceText(pattern, escapedValue);
           // Continue searching for more occurrences
           searchResult = body.findText(pattern);
