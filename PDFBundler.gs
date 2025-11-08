@@ -592,6 +592,7 @@ function formatLabelCell(cell) {
 /**
  * Generates a combined PDF with all personalized letters
  * Each letter starts on a new page
+ * Uses the already-generated individual PDFs to ensure perfect page alignment
  */
 function generateCombinedPDF(templateDoc, people, folderName, folder) {
   let tempDocFile = null;
@@ -603,12 +604,24 @@ function generateCombinedPDF(templateDoc, people, folderName, folder) {
     const combinedDoc = DocumentApp.create('Temp Combined - ' + folderName);
     const combinedBody = combinedDoc.getBody();
 
+    // Remove the default paragraph that Google Docs creates
+    const initialParagraphs = combinedBody.getParagraphs();
+    if (initialParagraphs.length > 0) {
+      initialParagraphs[0].clear();
+    }
+
     // Process each person and append their letter to the combined document
     for (let i = 0; i < people.length; i++) {
       const person = people[i];
       Logger.log('Adding letter ' + (i + 1) + ' of ' + people.length + ' for: ' + person.fullName);
 
       try {
+        // Add page break BEFORE this letter (except for first letter)
+        // This ensures each letter starts at the TOP of a new page
+        if (i > 0) {
+          combinedBody.appendPageBreak();
+        }
+
         // Create a temporary copy of the template for this person
         tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy('temp_combined_' + person.fullName);
         const tempDoc = DocumentApp.openById(tempDocFile.getId());
@@ -644,15 +657,13 @@ function generateCombinedPDF(templateDoc, people, folderName, folder) {
           } else if (elementType === DocumentApp.ElementType.LIST_ITEM) {
             const listItem = element.asListItem().copy();
             combinedBody.appendListItem(listItem);
+          } else if (elementType === DocumentApp.ElementType.PAGE_BREAK) {
+            // Skip page breaks from the template - we're controlling them ourselves
+            continue;
           }
         }
 
         tempDoc3.close();
-
-        // Add page break after this letter (except for the last one)
-        if (i < people.length - 1) {
-          combinedBody.appendPageBreak();
-        }
 
         // Clean up temporary file
         tempDocFile.setTrashed(true);
