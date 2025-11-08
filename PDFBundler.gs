@@ -265,17 +265,9 @@ function createPersonalizedPDF(templateDoc, personData) {
     const tempDoc = DocumentApp.openById(tempDocFile.getId());
     const body = tempDoc.getBody();
 
-    // Replace placeholders using replaceText (preserves formatting)
+    // Replace placeholders and handle empty values
     replacePlaceholdersInDocument(body, personData);
-
-    // First save to commit changes
     tempDoc.saveAndClose();
-
-    // Reopen and aggressively remove empty lines
-    const tempDoc2 = DocumentApp.openById(tempDocFile.getId());
-    const body2 = tempDoc2.getBody();
-    removeEmptyLines(body2);
-    tempDoc2.saveAndClose();
 
     // Export as PDF
     const pdfBlob = tempDocFile.getAs('application/pdf');
@@ -305,63 +297,8 @@ function createPersonalizedPDF(templateDoc, personData) {
 }
 
 /**
- * Removes only lines that became empty from placeholder replacement
- * Preserves intentional blank lines in the template
- */
-function removeEmptyLines(body) {
-  const marker = '%%REMOVE_THIS_LINE%%';
-  let removed = 0;
-
-  // Step 1: Replace all markers with empty string
-  body.replaceText(marker, '');
-
-  // Step 2: Remove paragraphs that are now completely empty (just whitespace)
-  // But only if they originally had a marker (we detect this by checking if removing them reduces content)
-  const paragraphs = body.getParagraphs();
-
-  // Iterate backwards to avoid index issues when removing
-  for (let i = paragraphs.length - 1; i >= 0; i--) {
-    const para = paragraphs[i];
-    const text = para.getText().trim();
-
-    // Only remove if paragraph is now empty/whitespace
-    // This catches paragraphs that ONLY had the marker
-    if (text === '') {
-      // Check if this is the only paragraph - if so, just clear it
-      if (body.getParagraphs().length === 1) {
-        para.clear();
-        removed++;
-      } else {
-        // Check if paragraph has any child elements besides text
-        // If it has tables, images, etc., keep it
-        try {
-          const numChildren = para.getNumChildren();
-          let hasNonTextContent = false;
-
-          for (let j = 0; j < numChildren; j++) {
-            const childType = para.getChild(j).getType();
-            if (childType !== DocumentApp.ElementType.TEXT) {
-              hasNonTextContent = true;
-              break;
-            }
-          }
-
-          if (!hasNonTextContent) {
-            para.removeFromParent();
-            removed++;
-          }
-        } catch (e) {
-          Logger.log('Could not remove empty paragraph: ' + e.message);
-        }
-      }
-    }
-  }
-
-  Logger.log('Removed ' + removed + ' empty placeholder lines');
-}
-
-/**
  * Replaces all placeholders in a document body
+ * If placeholder value is empty, removes the entire paragraph
  */
 function replacePlaceholdersInDocument(body, personData) {
   // Parse address into lines if provided
@@ -369,17 +306,14 @@ function replacePlaceholdersInDocument(body, personData) {
 
   // Current date in multiple formats
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy');
-  const todayFormatted = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM dd, yyyy'); // With leading zero
+  const todayFormatted = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM dd, yyyy');
 
   Logger.log('Replacement values for ' + personData.fullName + ':');
-  Logger.log('- DATE: ' + today);
-  Logger.log('- Month DD, YYYY: ' + todayFormatted);
   Logger.log('- ADDRESS LINE 1: "' + addressLines.line1 + '"');
-  Logger.log('- ADDRESS LINE 2: "' + addressLines.line2 + '" (length: ' + addressLines.line2.length + ')');
+  Logger.log('- ADDRESS LINE 2: "' + addressLines.line2 + '"');
   Logger.log('- CITY STATE ZIP: "' + addressLines.cityStateZip + '"');
-  Logger.log('- Raw address from spreadsheet: "' + (personData.address || '') + '"');
 
-  // Define all replacements
+  // Define all replacements with their values
   const replacements = {
     'FIRST NAME': personData.firstName || '',
     'FIRSTNAME': personData.firstName || '',
@@ -403,42 +337,51 @@ function replacePlaceholdersInDocument(body, personData) {
     'Month DD, YYYY': todayFormatted
   };
 
-  // Replace placeholders - ONLY match the brackets and text inside, nothing before/after
+  // Process each placeholder
   Object.keys(replacements).forEach(key => {
     let value = replacements[key];
 
-    // Ensure value is a string (not undefined/null)
+    // Ensure value is a string
     if (value === null || value === undefined) {
       value = '';
     }
+    value = String(value).trim();
 
-    // Convert to string
-    value = String(value);
-
-    // If value is empty, use a special marker so we can remove just those lines later
-    if (value === '') {
-      value = '%%REMOVE_THIS_LINE%%';
-    } else {
-      // Escape $ for Google Docs replaceText
-      value = value.replace(/\$/g, '$$$$');
-    }
-
-    // Create regex patterns - match ONLY what's inside the brackets
-    // \s* only applies to whitespace INSIDE the brackets, not before/after
-    // This preserves all line breaks and spacing around the placeholder
+    // Patterns to search for (different bracket types)
     const patterns = [
       '\\[' + key + '\\]',
-      '\\[' + key.toLowerCase() + '\\]',
-      '<' + key + '>',
-      '<' + key.toLowerCase() + '>',
-      '\\{\\{' + key + '\\}\\}',
-      '\\{\\{' + key.toLowerCase() + '\\}\\}'
+      '\\[' + key.toLowerCase() + '\\]'
     ];
 
-    // Use simple replaceText - it preserves document structure correctly
-    // as long as we only match the placeholder itself
     patterns.forEach(pattern => {
-      body.replaceText(pattern, value);
+      let searchResult = body.findText(pattern);
+
+      while (searchResult !== null) {
+        const element = searchResult.getElement();
+        const para = element.getParent().asParagraph();
+
+        if (value === '') {
+          // Empty value - remove the entire paragraph
+          try {
+            if (body.getParagraphs().length > 1) {
+              para.removeFromParent();
+              Logger.log('Removed empty placeholder paragraph for: ' + key);
+            } else {
+              para.clear();
+            }
+          } catch (e) {
+            Logger.log('Could not remove paragraph for ' + key + ': ' + e.message);
+          }
+          // Don't search for more - we removed the paragraph
+          break;
+        } else {
+          // Has value - replace the placeholder text
+          const escapedValue = value.replace(/\$/g, '$$$$');
+          body.replaceText(pattern, escapedValue);
+          // Continue searching for more occurrences
+          searchResult = body.findText(pattern);
+        }
+      }
     });
   });
 }
@@ -619,19 +562,13 @@ function generateCombinedPDF(templateDoc, people, folderName, folder) {
         const tempDoc = DocumentApp.openById(tempDocFile.getId());
         const tempBody = tempDoc.getBody();
 
-        // Replace placeholders
+        // Replace placeholders (also removes empty ones)
         replacePlaceholdersInDocument(tempBody, person);
         tempDoc.saveAndClose();
 
-        // Reopen and remove empty lines
-        const tempDoc2 = DocumentApp.openById(tempDocFile.getId());
-        const tempBody2 = tempDoc2.getBody();
-        removeEmptyLines(tempBody2);
-        tempDoc2.saveAndClose();
-
         // Reopen to copy content to combined document
-        const tempDoc3 = DocumentApp.openById(tempDocFile.getId());
-        const finalBody = tempDoc3.getBody();
+        const tempDoc2 = DocumentApp.openById(tempDocFile.getId());
+        const finalBody = tempDoc2.getBody();
 
         // Copy all content from this letter to the combined document
         const numChildren = finalBody.getNumChildren();
@@ -655,7 +592,7 @@ function generateCombinedPDF(templateDoc, people, folderName, folder) {
           }
         }
 
-        tempDoc3.close();
+        tempDoc2.close();
 
         // Clean up temporary file
         tempDocFile.setTrashed(true);
