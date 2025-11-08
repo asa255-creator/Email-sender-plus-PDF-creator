@@ -203,7 +203,34 @@ function parseAddress(address) {
   const stateZipPattern = /^[A-Z]{2}\s+\d{5}(-\d{4})?$/i;
 
   if (stateZipPattern.test(lastPart) && parts.length >= 3) {
-    // Format: "..., City, ST ZIP"
+    // Check if secondLastPart contains both suite/apt AND city
+    // Example: "# 200 LOUISVILLE" or "Suite 263 Lexington"
+    // Pattern: suite indicator + number/letter + city name
+    const suiteAndCityPattern = /^(#|suite|apt|apartment|unit|ste|no\.?)\s*([a-z0-9-]+)\s+(.+)$/i;
+    const suiteMatch = secondLastPart.match(suiteAndCityPattern);
+
+    if (suiteMatch) {
+      // Found suite/apt number AND city in same part
+      const suiteIndicator = suiteMatch[1];  // "#" or "Suite" etc
+      const suiteNumber = suiteMatch[2];      // "200" or "U-7" etc
+      const city = suiteMatch[3];             // "LOUISVILLE" or "Lexington"
+
+      const line2 = suiteIndicator + ' ' + suiteNumber;
+      const cityStateZip = city + ', ' + lastPart;
+      const addressParts = parts.slice(0, -2);
+
+      if (addressParts.length === 1) {
+        return { line1: addressParts[0], line2: line2, cityStateZip: cityStateZip };
+      } else {
+        return {
+          line1: addressParts[0],
+          line2: addressParts.slice(1).join(', ') + ', ' + line2,
+          cityStateZip: cityStateZip
+        };
+      }
+    }
+
+    // Format: "..., City, ST ZIP" (no suite in secondLastPart)
     const cityStateZip = secondLastPart + ', ' + lastPart;
     const addressParts = parts.slice(0, -2);
 
