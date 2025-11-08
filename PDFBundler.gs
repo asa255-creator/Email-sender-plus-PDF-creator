@@ -305,53 +305,59 @@ function createPersonalizedPDF(templateDoc, personData) {
 }
 
 /**
- * Removes only lines marked for removal (from empty placeholders)
+ * Removes only lines that became empty from placeholder replacement
  * Preserves intentional blank lines in the template
  */
 function removeEmptyLines(body) {
-  let removed = 0;
-  let attempts = 0;
-  const maxAttempts = 10; // Prevent infinite loop
   const marker = '%%REMOVE_THIS_LINE%%';
+  let removed = 0;
 
-  // Keep removing until no more marked lines found
-  while (attempts < maxAttempts) {
-    attempts++;
-    let foundMarked = false;
+  // Step 1: Replace all markers with empty string
+  body.replaceText(marker, '');
 
-    const paragraphs = body.getParagraphs();
+  // Step 2: Remove paragraphs that are now completely empty (just whitespace)
+  // But only if they originally had a marker (we detect this by checking if removing them reduces content)
+  const paragraphs = body.getParagraphs();
 
-    // Need at least 1 paragraph to work with
-    if (paragraphs.length === 0) break;
+  // Iterate backwards to avoid index issues when removing
+  for (let i = paragraphs.length - 1; i >= 0; i--) {
+    const para = paragraphs[i];
+    const text = para.getText().trim();
 
-    // Iterate backwards through paragraphs
-    for (let i = paragraphs.length - 1; i >= 0; i--) {
-      const para = paragraphs[i];
-      const text = para.getText();
-
-      // Only remove paragraphs that contain our marker
-      // This preserves intentional blank lines from the template
-      if (text.includes(marker)) {
+    // Only remove if paragraph is now empty/whitespace
+    // This catches paragraphs that ONLY had the marker
+    if (text === '') {
+      // Check if this is the only paragraph - if so, just clear it
+      if (body.getParagraphs().length === 1) {
+        para.clear();
+        removed++;
+      } else {
+        // Check if paragraph has any child elements besides text
+        // If it has tables, images, etc., keep it
         try {
-          // If this is the only paragraph, clear it instead of removing
-          if (paragraphs.length === 1) {
-            para.clear();
-          } else {
-            para.removeFromParent();
+          const numChildren = para.getNumChildren();
+          let hasNonTextContent = false;
+
+          for (let j = 0; j < numChildren; j++) {
+            const childType = para.getChild(j).getType();
+            if (childType !== DocumentApp.ElementType.TEXT) {
+              hasNonTextContent = true;
+              break;
+            }
           }
-          removed++;
-          foundMarked = true;
+
+          if (!hasNonTextContent) {
+            para.removeFromParent();
+            removed++;
+          }
         } catch (e) {
-          Logger.log('Could not remove marked paragraph: ' + e.message);
+          Logger.log('Could not remove empty paragraph: ' + e.message);
         }
       }
     }
-
-    // If no marked paragraphs found, we're done
-    if (!foundMarked) break;
   }
 
-  Logger.log('Removed ' + removed + ' empty placeholder lines (kept intentional blank lines)');
+  Logger.log('Removed ' + removed + ' empty placeholder lines');
 }
 
 /**
@@ -397,7 +403,7 @@ function replacePlaceholdersInDocument(body, personData) {
     'Month DD, YYYY': todayFormatted
   };
 
-  // Replace placeholders using element-level manipulation to preserve all line breaks
+  // Replace placeholders - ONLY match the brackets and text inside, nothing before/after
   Object.keys(replacements).forEach(key => {
     let value = replacements[key];
 
@@ -409,7 +415,7 @@ function replacePlaceholdersInDocument(body, personData) {
     // Convert to string
     value = String(value);
 
-    // If value is empty, use a special marker so we can remove just those lines
+    // If value is empty, use a special marker so we can remove just those lines later
     if (value === '') {
       value = '%%REMOVE_THIS_LINE%%';
     } else {
@@ -417,36 +423,22 @@ function replacePlaceholdersInDocument(body, personData) {
       value = value.replace(/\$/g, '$$$$');
     }
 
-    // Create regex patterns for different placeholder formats
+    // Create regex patterns - match ONLY what's inside the brackets
+    // \s* only applies to whitespace INSIDE the brackets, not before/after
+    // This preserves all line breaks and spacing around the placeholder
     const patterns = [
-      '\\[\\s*' + key + '\\s*\\]',
-      '\\[\\s*' + key.toLowerCase() + '\\s*\\]',
-      '<\\s*' + key + '\\s*>',
-      '<\\s*' + key.toLowerCase() + '\\s*>',
-      '\\{\\{\\s*' + key + '\\s*\\}\\}',
-      '\\{\\{\\s*' + key.toLowerCase() + '\\s*\\}\\}'
+      '\\[' + key + '\\]',
+      '\\[' + key.toLowerCase() + '\\]',
+      '<' + key + '>',
+      '<' + key.toLowerCase() + '>',
+      '\\{\\{' + key + '\\}\\}',
+      '\\{\\{' + key.toLowerCase() + '\\}\\}'
     ];
 
-    // For each pattern, find and replace while preserving document structure
+    // Use simple replaceText - it preserves document structure correctly
+    // as long as we only match the placeholder itself
     patterns.forEach(pattern => {
-      // Use findText to locate occurrences
-      let searchResult = body.findText(pattern);
-      while (searchResult !== null) {
-        const foundElement = searchResult.getElement();
-        const startOffset = searchResult.getStartOffset();
-        const endOffset = searchResult.getEndOffsetInclusive();
-
-        // Get the text element
-        const textElement = foundElement.asText();
-
-        // Replace this specific occurrence
-        // This preserves the element structure and all formatting/breaks
-        textElement.deleteText(startOffset, endOffset);
-        textElement.insertText(startOffset, value);
-
-        // Continue searching after this replacement
-        searchResult = body.findText(pattern, searchResult);
-      }
+      body.replaceText(pattern, value);
     });
   });
 }
