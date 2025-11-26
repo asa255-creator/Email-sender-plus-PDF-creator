@@ -111,6 +111,7 @@ function replaceAllPlaceholders(template, personData) {
     'PAC NAMES': personData.pacName || '',
     'ORGANIZATION NAME': personData.pacName || '',
     'ORGANIZATION': personData.pacName || '',
+    'ORG': personData.pacName || '',
 
     // Address (3-line format)
     'ADDRESS LINE 1': addressLines.line1,

@@ -11,13 +11,20 @@ function onOpen() {
   // Then create the menu
   SpreadsheetApp.getUi()
     .createMenu('📧 Email Tools')
-    .addItem('Create Gmail Drafts', 'createDraftsFromList')
-    .addItem('Send Emails with Attachment', 'sendEmailsFromListWithAttachment')
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Create Drafts')
+      .addItem('✉️ Create Drafts (no attachment)', 'createDraftsFromList')
+      .addItem('📎 Create Drafts (with attachment)', 'createDraftsFromListWithAttachment'))
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Send Emails')
+      .addItem('✉️ Send Emails (no attachment)', 'sendEmailsFromList')
+      .addItem('📎 Send Emails (with attachment)', 'sendEmailsFromListWithAttachment'))
     .addSeparator()
-    .addItem('Fill Emails from VCF File', 'fillEmailsFromVCF')
-    .addItem('Fill Emails from Google Contacts', 'fillEmailsFromGoogleContacts')
+    .addItem('📄 Import HTML from Google Doc', 'importHTMLFromGoogleDoc')
     .addSeparator()
-    .addItem('Generate PDF Bundle & Labels', 'generatePDFBundleWithLabels')
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Find Contacts')
+      .addItem('📇 Fill Emails from VCF File', 'fillEmailsFromVCF')
+      .addItem('👤 Fill Emails from Google Contacts', 'fillEmailsFromGoogleContacts'))
+    .addSeparator()
+    .addItem('📑 Generate PDF Bundle & Labels', 'generatePDFBundleWithLabels')
     .addToUi();
 }
 

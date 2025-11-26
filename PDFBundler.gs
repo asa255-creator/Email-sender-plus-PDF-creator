@@ -418,6 +418,7 @@ function replacePlaceholdersInDocument(body, personData) {
     'PAC NAMES': personData.pacName || '',
     'ORGANIZATION NAME': personData.pacName || '',
     'ORGANIZATION': personData.pacName || '',
+    'ORG': personData.pacName || '',
     'ADDRESS LINE 1': addressLines.line1,
     'ADDRESS LINE 2': addressLines.line2,
     'CITY STATE ZIP': addressLines.cityStateZip,
