@@ -42,15 +42,15 @@ function createDraftsFromList() {
 
   let created = 0;
   values.forEach(row => {
-    const fullName = String(row[NAME_COL - 1] || '').trim();
+    const fullName = String(row[NAME_COL - 1] || '').trim() || 'To Whom It May Concern';
     const pacName = String(row[PAC_COL - 1] || '').trim();
     const email = String(row[EMAIL_COL - 1] || '').trim();
     const phone = String(row[PHONE_COL - 1] || '').trim();
     const address = String(row[ADDRESS_COL - 1] || '').trim();
 
-    if (!fullName || !email) return;
+    if (!email) return; // Only skip if email is missing
 
-    const firstName = extractFirstName(fullName);
+    const firstName = fullName === 'To Whom It May Concern' ? fullName : extractFirstName(fullName);
 
     // Build person data object for placeholder replacement
     let personData = {
@@ -123,15 +123,15 @@ function createDraftsFromListWithAttachment() {
 
   let created = 0;
   values.forEach(row => {
-    const fullName = String(row[NAME_COL - 1] || '').trim();
+    const fullName = String(row[NAME_COL - 1] || '').trim() || 'To Whom It May Concern';
     const pacName = String(row[PAC_COL - 1] || '').trim();
     const email = String(row[EMAIL_COL - 1] || '').trim();
     const phone = String(row[PHONE_COL - 1] || '').trim();
     const address = String(row[ADDRESS_COL - 1] || '').trim();
 
-    if (!fullName || !email) return;
+    if (!email) return; // Only skip if email is missing
 
-    const firstName = extractFirstName(fullName);
+    const firstName = fullName === 'To Whom It May Concern' ? fullName : extractFirstName(fullName);
 
     // Build person data object for placeholder replacement
     let personData = {
@@ -199,15 +199,15 @@ function sendEmailsFromList() {
 
   let sent = 0;
   values.forEach(row => {
-    const fullName = String(row[NAME_COL - 1] || '').trim();
+    const fullName = String(row[NAME_COL - 1] || '').trim() || 'To Whom It May Concern';
     const pacName = String(row[PAC_COL - 1] || '').trim();
     const email = String(row[EMAIL_COL - 1] || '').trim();
     const phone = String(row[PHONE_COL - 1] || '').trim();
     const address = String(row[ADDRESS_COL - 1] || '').trim();
 
-    if (!fullName || !email) return;
+    if (!email) return; // Only skip if email is missing
 
-    const firstName = extractFirstName(fullName);
+    const firstName = fullName === 'To Whom It May Concern' ? fullName : extractFirstName(fullName);
 
     // Build person data object for placeholder replacement
     let personData = {
@@ -280,15 +280,15 @@ function sendEmailsFromListWithAttachment() {
 
   let sent = 0;
   values.forEach(row => {
-    const fullName = String(row[NAME_COL - 1] || '').trim();
+    const fullName = String(row[NAME_COL - 1] || '').trim() || 'To Whom It May Concern';
     const pacName = String(row[PAC_COL - 1] || '').trim();
     const email = String(row[EMAIL_COL - 1] || '').trim();
     const phone = String(row[PHONE_COL - 1] || '').trim();
     const address = String(row[ADDRESS_COL - 1] || '').trim();
 
-    if (!fullName || !email) return;
+    if (!email) return; // Only skip if email is missing
 
-    const firstName = extractFirstName(fullName);
+    const firstName = fullName === 'To Whom It May Concern' ? fullName : extractFirstName(fullName);
 
     // Build person data object for placeholder replacement
     let personData = {
