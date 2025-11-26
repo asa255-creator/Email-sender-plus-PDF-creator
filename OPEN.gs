@@ -79,17 +79,18 @@ function validateEmailDetailsSheet(ss) {
   }
 
   // Check if labels exist in row 1
-  const labels = sheet.getRange(1, 1, 1, 3).getValues()[0];
+  const labels = sheet.getRange(1, 1, 1, 4).getValues()[0];
 
   // Set labels only if they're missing
   if (!labels[0]) sheet.getRange(1, 1).setValue('Body Template');
   if (!labels[1]) sheet.getRange(1, 2).setValue('Subject Template');
   if (!labels[2]) sheet.getRange(1, 3).setValue('Drive URL or File ID');
+  if (!labels[3]) sheet.getRange(1, 4).setValue('CC Emails');
 
   // Format label row
-  sheet.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#f3f3f3');
+  sheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f3f3f3');
 
-  // Add helpful notes in row 1 (below labels)
+  // Add helpful notes in row 2 (below labels)
   const noteStyle = SpreadsheetApp.newTextStyle().setFontSize(9).setForegroundColor('#666666').build();
 
   if (!sheet.getRange(2, 1).getValue()) {
@@ -101,9 +102,13 @@ function validateEmailDetailsSheet(ss) {
   if (!sheet.getRange(2, 3).getValue()) {
     sheet.getRange(2, 3).setValue('Optional: Google Drive file ID or URL for PDF attachment.');
   }
+  if (!sheet.getRange(2, 4).getValue()) {
+    sheet.getRange(2, 4).setValue('Optional: CC email addresses (one per row: D2, D3, D4, etc.)');
+  }
 
   // Resize columns for better readability
   sheet.setColumnWidth(1, 400);
   sheet.setColumnWidth(2, 300);
   sheet.setColumnWidth(3, 300);
+  sheet.setColumnWidth(4, 250);
 }

@@ -26,6 +26,9 @@ function createDraftsFromList() {
   if (!bodyTemplate) throw new Error('Body template missing in email details A2.');
   if (!subjectTemplate) throw new Error('Subject missing in email details B2.');
 
+  // Get CC addresses from column D (D2, D3, D4, etc.)
+  const ccAddresses = getCCAddresses(detailsSh);
+
   const lastRow = listSh.getLastRow();
   if (lastRow < 2) {
     SpreadsheetApp.getUi().alert('No data rows found.');
@@ -68,17 +71,21 @@ function createDraftsFromList() {
 
     if (USE_HTML) {
       const bodyHtml = buildHtmlBodyFromTemplate(bodyWithPlaceholders, signatureHtml);
-      GmailApp.createDraft(email, subject, '', { htmlBody: bodyHtml });
+      const options = { htmlBody: bodyHtml };
+      if (ccAddresses) options.cc = ccAddresses;
+      GmailApp.createDraft(email, subject, '', options);
     } else {
       const bodyText = asPlainText(bodyWithPlaceholders);
       const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
-      GmailApp.createDraft(email, subject, bodyWithSig);
+      const options = {};
+      if (ccAddresses) options.cc = ccAddresses;
+      GmailApp.createDraft(email, subject, bodyWithSig, options);
     }
 
     created++;
   });
 
-  SpreadsheetApp.getUi().alert('Drafts created: ' + created);
+  SpreadsheetApp.getUi().alert('Drafts created: ' + created + (ccAddresses ? '\nCC: ' + ccAddresses : ''));
 }
 
 /** ============== CREATE DRAFTS WITH ATTACHMENT =============== **/
@@ -94,6 +101,9 @@ function createDraftsFromListWithAttachment() {
   if (!bodyTemplate) throw new Error('Body template missing in email details A2.');
   if (!subjectTemplate) throw new Error('Subject missing in email details B2.');
 
+  // Get CC addresses from column D (D2, D3, D4, etc.)
+  const ccAddresses = getCCAddresses(detailsSh);
+
   let file = null;
   if (attachmentRef) {
     file = fileFromDriveLink(attachmentRef);
@@ -145,18 +155,20 @@ function createDraftsFromListWithAttachment() {
       const options = file
         ? { htmlBody: bodyHtml, attachments: [file.getAs(MimeType.PDF)] }
         : { htmlBody: bodyHtml };
+      if (ccAddresses) options.cc = ccAddresses;
       GmailApp.createDraft(email, subject, '', options);
     } else {
       const bodyText = asPlainText(bodyWithPlaceholders);
       const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
       const options = file ? { attachments: [file.getAs(MimeType.PDF)] } : {};
+      if (ccAddresses) options.cc = ccAddresses;
       GmailApp.createDraft(email, subject, bodyWithSig, options);
     }
 
     created++;
   });
 
-  SpreadsheetApp.getUi().alert('Drafts created: ' + created + (file ? ' (with attachment)' : ' (no attachment)'));
+  SpreadsheetApp.getUi().alert('Drafts created: ' + created + (file ? ' (with attachment)' : ' (no attachment)') + (ccAddresses ? '\nCC: ' + ccAddresses : ''));
 }
 
 /** ==================== SEND WITHOUT ATTACHMENT =============== **/
@@ -170,6 +182,9 @@ function sendEmailsFromList() {
   const subjectTemplate = String(detailsSh.getRange('B2').getValue() || '');
   if (!bodyTemplate) throw new Error('Body template missing in email details A2.');
   if (!subjectTemplate) throw new Error('Subject missing in email details B2.');
+
+  // Get CC addresses from column D (D2, D3, D4, etc.)
+  const ccAddresses = getCCAddresses(detailsSh);
 
   const lastRow = listSh.getLastRow();
   if (lastRow < 2) {
@@ -213,17 +228,21 @@ function sendEmailsFromList() {
 
     if (USE_HTML) {
       const bodyHtml = buildHtmlBodyFromTemplate(bodyWithPlaceholders, signatureHtml);
-      GmailApp.sendEmail(email, subject, stripHtml(bodyHtml) || ' ', { htmlBody: bodyHtml });
+      const options = { htmlBody: bodyHtml };
+      if (ccAddresses) options.cc = ccAddresses;
+      GmailApp.sendEmail(email, subject, stripHtml(bodyHtml) || ' ', options);
     } else {
       const bodyText = asPlainText(bodyWithPlaceholders);
       const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
-      GmailApp.sendEmail(email, subject, bodyWithSig);
+      const options = {};
+      if (ccAddresses) options.cc = ccAddresses;
+      GmailApp.sendEmail(email, subject, bodyWithSig, options);
     }
 
     sent++;
   });
 
-  SpreadsheetApp.getUi().alert('Emails sent: ' + sent);
+  SpreadsheetApp.getUi().alert('Emails sent: ' + sent + (ccAddresses ? '\nCC: ' + ccAddresses : ''));
 }
 
 /** ===================== SEND WITH ATTACHMENT ================= **/
@@ -238,6 +257,9 @@ function sendEmailsFromListWithAttachment() {
   const attachmentRef = String(detailsSh.getRange('C2').getValue() || ''); // Drive URL or file ID
   if (!bodyTemplate) throw new Error('Body template missing in email details A2.');
   if (!subjectTemplate) throw new Error('Subject missing in email details B2.');
+
+  // Get CC addresses from column D (D2, D3, D4, etc.)
+  const ccAddresses = getCCAddresses(detailsSh);
 
   let file = null;
   if (attachmentRef) {
@@ -290,18 +312,20 @@ function sendEmailsFromListWithAttachment() {
       const options = file
         ? { htmlBody: bodyHtml, attachments: [file.getAs(MimeType.PDF)] }
         : { htmlBody: bodyHtml };
+      if (ccAddresses) options.cc = ccAddresses;
       GmailApp.sendEmail(email, subject, stripHtml(bodyHtml) || ' ', options);
     } else {
       const bodyText = asPlainText(bodyWithPlaceholders);
       const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
       const options = file ? { attachments: [file.getAs(MimeType.PDF)] } : {};
+      if (ccAddresses) options.cc = ccAddresses;
       GmailApp.sendEmail(email, subject, bodyWithSig, options);
     }
 
     sent++;
   });
 
-  SpreadsheetApp.getUi().alert('Emails sent: ' + sent + (file ? ' (with attachment)' : ' (no attachment)'));
+  SpreadsheetApp.getUi().alert('Emails sent: ' + sent + (file ? ' (with attachment)' : ' (no attachment)') + (ccAddresses ? '\nCC: ' + ccAddresses : ''));
 }
 
 /** ================== IMPORT HTML FROM GOOGLE DOC ============= **/
@@ -422,4 +446,27 @@ function convertDocBodyToHTML(body) {
 
   html += '</div>';
   return html;
+}
+
+/** =================== CC ADDRESS HELPER ====================== **/
+/**
+ * Gets CC email addresses from column D of email details sheet (D2, D3, D4, etc.)
+ * Returns comma-separated string of addresses, or empty string if none found
+ */
+function getCCAddresses(detailsSheet) {
+  const lastRow = detailsSheet.getLastRow();
+  if (lastRow < 2) return ''; // No data rows
+
+  // Read all values in column D starting from D2
+  const ccValues = detailsSheet.getRange(2, 4, lastRow - 1, 1).getValues();
+
+  // Filter out empty cells and trim
+  const addresses = ccValues
+    .map(row => String(row[0] || '').trim())
+    .filter(addr => addr !== '' && addr.includes('@')); // Basic email validation
+
+  if (addresses.length === 0) return '';
+
+  // Join multiple addresses with comma
+  return addresses.join(',');
 }
