@@ -354,7 +354,7 @@ function createPersonalizedPDF(templateDoc, personData) {
     Logger.log('Person data: ' + JSON.stringify(personData));
 
     // Make a temporary copy of the template
-    tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy(personData.firstName + (personData.pacName ? '-' + personData.pacName : ''));
+    tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy(personData.fullName + (personData.pacName ? '-' + personData.pacName : ''));
     const tempDoc = DocumentApp.openById(tempDocFile.getId());
     const body = tempDoc.getBody();
 
@@ -652,7 +652,7 @@ function generateCombinedPDF(templateDoc, people, folderName, folder) {
         }
 
         // Create a temporary copy of the template for this person
-        tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy(person.firstName + (person.pacName ? '-' + person.pacName : ''));
+        tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy(person.fullName + (person.pacName ? '-' + person.pacName : ''));
         const tempDoc = DocumentApp.openById(tempDocFile.getId());
         const tempBody = tempDoc.getBody();
 
