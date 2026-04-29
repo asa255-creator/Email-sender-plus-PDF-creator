@@ -133,18 +133,18 @@ function generatePDFBundleWithLabels() {
   const width = 5; // Read all 5 columns (A-E)
   const values = listSh.getRange(2, 1, lastRow - 1, width).getDisplayValues();
 
-  // Filter valid rows (must have name and address)
+  // Filter valid rows (must have address; name falls back to "To Whom It May Concern")
   const people = [];
   values.forEach(row => {
-    const fullName = String(row[BUNDLE_NAME_COL - 1] || '').trim();
+    const fullName = String(row[BUNDLE_NAME_COL - 1] || '').trim() || 'To Whom It May Concern';
     const pacName = String(row[BUNDLE_PAC_COL - 1] || '').trim();
     const email = String(row[BUNDLE_EMAIL_COL - 1] || '').trim();
     const phone = String(row[BUNDLE_PHONE_COL - 1] || '').trim();
     const address = String(row[BUNDLE_ADDRESS_COL - 1] || '').trim();
 
-    if (!fullName || !address) return;
+    if (!address) return;
 
-    const firstName = extractFirstName(fullName);
+    const firstName = fullName === 'To Whom It May Concern' ? fullName : extractFirstName(fullName);
 
     // Build person data object
     let personData = {
@@ -354,7 +354,7 @@ function createPersonalizedPDF(templateDoc, personData) {
     Logger.log('Person data: ' + JSON.stringify(personData));
 
     // Make a temporary copy of the template
-    tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy('temp_' + personData.fullName);
+    tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy(personData.fullName + (personData.pacName ? '-' + personData.pacName : ''));
     const tempDoc = DocumentApp.openById(tempDocFile.getId());
     const body = tempDoc.getBody();
 
@@ -652,7 +652,7 @@ function generateCombinedPDF(templateDoc, people, folderName, folder) {
         }
 
         // Create a temporary copy of the template for this person
-        tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy('temp_combined_' + person.fullName);
+        tempDocFile = DriveApp.getFileById(templateDoc.getId()).makeCopy(person.fullName + (person.pacName ? '-' + person.pacName : ''));
         const tempDoc = DocumentApp.openById(tempDocFile.getId());
         const tempBody = tempDoc.getBody();
 
