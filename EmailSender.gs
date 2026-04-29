@@ -90,6 +90,7 @@ function createDraftsFromList() {
 
 /** ============== CREATE DRAFTS WITH ATTACHMENT =============== **/
 function createDraftsFromListWithAttachment() {
+  const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActive();
   const listSh = ss.getSheetByName(LIST_SHEET) || ss.getActiveSheet();
   const detailsSh = ss.getSheetByName(DETAILS_SHEET);
@@ -97,22 +98,20 @@ function createDraftsFromListWithAttachment() {
 
   const bodyTemplate = String(detailsSh.getRange('A2').getValue() || '');
   const subjectTemplate = String(detailsSh.getRange('B2').getValue() || '');
-  const attachmentRef = String(detailsSh.getRange('C2').getValue() || ''); // Drive URL or file ID
+  const attachmentRef = String(detailsSh.getRange('C2').getValue() || '').trim();
   if (!bodyTemplate) throw new Error('Body template missing in email details A2.');
   if (!subjectTemplate) throw new Error('Subject missing in email details B2.');
 
   // Get CC addresses from column D (D2, D3, D4, etc.)
   const ccAddresses = getCCAddresses(detailsSh);
 
-  let file = null;
-  if (attachmentRef) {
-    file = fileFromDriveLink(attachmentRef);
-    if (!file) throw new Error('Could not open the file from C2. Check that the link or ID is correct and you have access.');
-  }
+  // Validate and confirm attachment file (same flow as PDF Bundle)
+  const attachmentInfo = validateAndConfirmAttachment(ui, attachmentRef);
+  if (attachmentInfo === null) return; // User cancelled or error
 
   const lastRow = listSh.getLastRow();
   if (lastRow < 2) {
-    SpreadsheetApp.getUi().alert('No data rows found.');
+    ui.alert('No data rows found.');
     return;
   }
 
@@ -150,17 +149,20 @@ function createDraftsFromListWithAttachment() {
     const subject = replaceAllPlaceholders(subjectTemplate, personData);
     const bodyWithPlaceholders = replaceAllPlaceholders(bodyTemplate, personData);
 
+    // Build attachment blob: personalized PDF if Google Doc, otherwise static file
+    const attachmentBlob = attachmentInfo ? buildAttachmentBlob(attachmentInfo, personData) : null;
+
     if (USE_HTML) {
       const bodyHtml = buildHtmlBodyFromTemplate(bodyWithPlaceholders, signatureHtml);
-      const options = file
-        ? { htmlBody: bodyHtml, attachments: [file.getAs(MimeType.PDF)] }
+      const options = attachmentBlob
+        ? { htmlBody: bodyHtml, attachments: [attachmentBlob] }
         : { htmlBody: bodyHtml };
       if (ccAddresses) options.cc = ccAddresses;
       GmailApp.createDraft(email, subject, '', options);
     } else {
       const bodyText = asPlainText(bodyWithPlaceholders);
       const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
-      const options = file ? { attachments: [file.getAs(MimeType.PDF)] } : {};
+      const options = attachmentBlob ? { attachments: [attachmentBlob] } : {};
       if (ccAddresses) options.cc = ccAddresses;
       GmailApp.createDraft(email, subject, bodyWithSig, options);
     }
@@ -168,7 +170,10 @@ function createDraftsFromListWithAttachment() {
     created++;
   });
 
-  SpreadsheetApp.getUi().alert('Drafts created: ' + created + (file ? ' (with attachment)' : ' (no attachment)') + (ccAddresses ? '\nCC: ' + ccAddresses : ''));
+  const attachLabel = attachmentInfo
+    ? (attachmentInfo.isGoogleDoc ? ' (with personalized PDF attachment)' : ' (with attachment)')
+    : ' (no attachment)';
+  ui.alert('Drafts created: ' + created + attachLabel + (ccAddresses ? '\nCC: ' + ccAddresses : ''));
 }
 
 /** ==================== SEND WITHOUT ATTACHMENT =============== **/
@@ -247,6 +252,7 @@ function sendEmailsFromList() {
 
 /** ===================== SEND WITH ATTACHMENT ================= **/
 function sendEmailsFromListWithAttachment() {
+  const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActive();
   const listSh = ss.getSheetByName(LIST_SHEET) || ss.getActiveSheet();
   const detailsSh = ss.getSheetByName(DETAILS_SHEET);
@@ -254,22 +260,20 @@ function sendEmailsFromListWithAttachment() {
 
   const bodyTemplate = String(detailsSh.getRange('A2').getValue() || '');
   const subjectTemplate = String(detailsSh.getRange('B2').getValue() || '');
-  const attachmentRef = String(detailsSh.getRange('C2').getValue() || ''); // Drive URL or file ID
+  const attachmentRef = String(detailsSh.getRange('C2').getValue() || '').trim();
   if (!bodyTemplate) throw new Error('Body template missing in email details A2.');
   if (!subjectTemplate) throw new Error('Subject missing in email details B2.');
 
   // Get CC addresses from column D (D2, D3, D4, etc.)
   const ccAddresses = getCCAddresses(detailsSh);
 
-  let file = null;
-  if (attachmentRef) {
-    file = fileFromDriveLink(attachmentRef);
-    if (!file) throw new Error('Could not open the file from C2. Check that the link or ID is correct and you have access.');
-  }
+  // Validate and confirm attachment file (same flow as PDF Bundle)
+  const attachmentInfo = validateAndConfirmAttachment(ui, attachmentRef);
+  if (attachmentInfo === null) return; // User cancelled or error
 
   const lastRow = listSh.getLastRow();
   if (lastRow < 2) {
-    SpreadsheetApp.getUi().alert('No data rows found.');
+    ui.alert('No data rows found.');
     return;
   }
 
@@ -307,17 +311,20 @@ function sendEmailsFromListWithAttachment() {
     const subject = replaceAllPlaceholders(subjectTemplate, personData);
     const bodyWithPlaceholders = replaceAllPlaceholders(bodyTemplate, personData);
 
+    // Build attachment blob: personalized PDF if Google Doc, otherwise static file
+    const attachmentBlob = attachmentInfo ? buildAttachmentBlob(attachmentInfo, personData) : null;
+
     if (USE_HTML) {
       const bodyHtml = buildHtmlBodyFromTemplate(bodyWithPlaceholders, signatureHtml);
-      const options = file
-        ? { htmlBody: bodyHtml, attachments: [file.getAs(MimeType.PDF)] }
+      const options = attachmentBlob
+        ? { htmlBody: bodyHtml, attachments: [attachmentBlob] }
         : { htmlBody: bodyHtml };
       if (ccAddresses) options.cc = ccAddresses;
       GmailApp.sendEmail(email, subject, stripHtml(bodyHtml) || ' ', options);
     } else {
       const bodyText = asPlainText(bodyWithPlaceholders);
       const bodyWithSig = bodyText + (signatureHtml ? '\n\n' + stripHtml(signatureHtml) : '');
-      const options = file ? { attachments: [file.getAs(MimeType.PDF)] } : {};
+      const options = attachmentBlob ? { attachments: [attachmentBlob] } : {};
       if (ccAddresses) options.cc = ccAddresses;
       GmailApp.sendEmail(email, subject, bodyWithSig, options);
     }
@@ -325,7 +332,10 @@ function sendEmailsFromListWithAttachment() {
     sent++;
   });
 
-  SpreadsheetApp.getUi().alert('Emails sent: ' + sent + (file ? ' (with attachment)' : ' (no attachment)') + (ccAddresses ? '\nCC: ' + ccAddresses : ''));
+  const attachLabel = attachmentInfo
+    ? (attachmentInfo.isGoogleDoc ? ' (with personalized PDF attachment)' : ' (with attachment)')
+    : ' (no attachment)';
+  ui.alert('Emails sent: ' + sent + attachLabel + (ccAddresses ? '\nCC: ' + ccAddresses : ''));
 }
 
 /** ================== IMPORT HTML FROM GOOGLE DOC ============= **/
@@ -446,6 +456,126 @@ function convertDocBodyToHTML(body) {
 
   html += '</div>';
   return html;
+}
+
+/** ========= ATTACHMENT VALIDATION & CONFIRMATION ============= **/
+
+/**
+ * Validates and confirms the attachment file from C2 with the same
+ * step-by-step flow used by generatePDFBundleWithLabels().
+ *
+ * Returns:
+ *   - null  → user cancelled or a hard error occurred (caller should return)
+ *   - false → C2 was empty, no attachment (caller should proceed without one)
+ *   - { fileId, fileName, file, isGoogleDoc, templateDoc }
+ *             → confirmed file ready to use
+ */
+function validateAndConfirmAttachment(ui, attachmentRef) {
+  if (!attachmentRef) return false; // No attachment specified
+
+  // Step 1: show what's in C2 and attempt to extract the file ID
+  ui.alert(
+    'Step 1: Checking Attachment File\n\n' +
+    'Value in "email details" sheet, cell C2:\n' +
+    attachmentRef.substring(0, 100) + (attachmentRef.length > 100 ? '...' : '') + '\n\n' +
+    'Extracting file ID...'
+  );
+
+  const fileId = extractDriveId(attachmentRef);
+  if (!fileId) {
+    ui.alert(
+      'Error: Could not extract file ID from C2.\n\n' +
+      'Value in C2: ' + attachmentRef + '\n\n' +
+      'Please use one of these formats:\n' +
+      '• Full Drive URL: https://drive.google.com/file/d/FILE_ID/view\n' +
+      '• Google Doc URL: https://docs.google.com/document/d/FILE_ID/edit\n' +
+      '• Just the file ID: 1a2b3c4d5e6f7g8h9i0j'
+    );
+    return null;
+  }
+
+  // Look up file name and type before asking for confirmation
+  let fileName = '';
+  let fileType = '';
+  let driveFile;
+  try {
+    driveFile = DriveApp.getFileById(fileId);
+    fileName = driveFile.getName();
+    fileType = driveFile.getMimeType();
+  } catch (e) {
+    ui.alert(
+      'Error: Cannot access file with ID: ' + fileId + '\n\n' +
+      'Error: ' + e.message + '\n\n' +
+      'Make sure you have access to this file.'
+    );
+    return null;
+  }
+
+  const isGoogleDoc = fileType === 'application/vnd.google-apps.document';
+  const typeLabel = isGoogleDoc
+    ? 'Google Doc (will generate a personalized PDF for each recipient)'
+    : 'File type: ' + fileType + ' (will attach the same file to every email)';
+
+  // Step 2: confirm with user
+  const confirm = ui.alert(
+    'Step 2: Confirm Attachment File',
+    'Found this file:\n\n' +
+    '📄 File Name: ' + fileName + '\n' +
+    typeLabel + '\n\n' +
+    'File ID: ' + fileId + '\n\n' +
+    'Is "' + fileName + '" the correct attachment?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirm === ui.Button.NO) {
+    ui.alert(
+      'Cancelled.\n\n' +
+      'Please update cell C2 in "email details" sheet with the correct file URL.\n\n' +
+      'Currently has: ' + fileName
+    );
+    return null;
+  }
+
+  // Open the Google Doc template if applicable
+  let templateDoc = null;
+  if (isGoogleDoc) {
+    try {
+      templateDoc = DocumentApp.openById(fileId);
+    } catch (e) {
+      ui.alert('Error: Cannot open Google Doc\n\nDocument: ' + fileName + '\nError: ' + e.message);
+      return null;
+    }
+  }
+
+  return { fileId, fileName, file: driveFile, isGoogleDoc, templateDoc };
+}
+
+/**
+ * Builds the attachment blob for one recipient.
+ * If the attachment is a Google Doc, generates a personalized PDF using
+ * the same placeholder replacement as generatePDFBundleWithLabels().
+ * Otherwise returns the file converted to PDF (static, same for all).
+ */
+function buildAttachmentBlob(attachmentInfo, personData) {
+  if (!attachmentInfo) return null;
+
+  if (attachmentInfo.isGoogleDoc) {
+    // Personalized PDF – delegates to PDFBundler's createPersonalizedPDF()
+    try {
+      return createPersonalizedPDF(attachmentInfo.templateDoc, personData);
+    } catch (e) {
+      Logger.log('Could not generate personalized PDF for ' + personData.fullName + ': ' + e.message);
+      return null;
+    }
+  }
+
+  // Static file – convert to PDF and attach the same blob to every email
+  try {
+    return attachmentInfo.file.getAs(MimeType.PDF);
+  } catch (e) {
+    Logger.log('Could not convert attachment to PDF: ' + e.message);
+    return null;
+  }
 }
 
 /** =================== CC ADDRESS HELPER ====================== **/
