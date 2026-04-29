@@ -160,7 +160,35 @@ function parseAddress(address) {
   }
 
   if (parts.length === 1) {
-    // Just one part - treat as street address
+    // No commas — try to split "123 Main St NW Washington DC 20010" style addresses.
+    // Strategy 1: street ends at a known street-type word (optionally followed by a
+    //   directional like NW, SE, etc.), then the remaining words are city + state + zip.
+    const noCommaPattern = /^(.+?\b(?:rd|st|ave|blvd|dr|ln|ct|pl|way|cir|hwy|pkwy|loop|ter|terr|trl|run|row|path|pass|pike|pt)\b\.?\s*(?:(?:nw|ne|sw|se|north|south|east|west|n|s|e|w)\.?)?\s+)(.+?)\s+\b([A-Z]{2})\b\s+(\d{5}(?:-\d{4})?)\s*$/i;
+    const m1 = parts[0].match(noCommaPattern);
+    if (m1) {
+      return {
+        line1: m1[1].trim(),
+        line2: '',
+        cityStateZip: m1[2].trim() + ', ' + m1[3].toUpperCase() + ' ' + m1[4]
+      };
+    }
+
+    // Strategy 2: no recognized street type — at least find STATE ZIP at the end
+    //   and treat the last word before it as the city.
+    const stateZipTail = parts[0].match(/\b([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i);
+    if (stateZipTail) {
+      const before = parts[0].slice(0, parts[0].lastIndexOf(stateZipTail[0])).trim();
+      const words = before.split(/\s+/);
+      if (words.length >= 2) {
+        return {
+          line1: words.slice(0, -1).join(' '),
+          line2: '',
+          cityStateZip: words[words.length - 1] + ', ' + stateZipTail[1].toUpperCase() + ' ' + stateZipTail[2]
+        };
+      }
+    }
+
+    // Fallback: just one part with no recognizable pattern
     return { line1: parts[0], line2: '', cityStateZip: '' };
   }
 
