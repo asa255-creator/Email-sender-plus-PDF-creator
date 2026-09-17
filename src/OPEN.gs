@@ -25,6 +25,12 @@ function onOpen() {
       .addItem('👤 Fill Emails from Google Contacts', 'fillEmailsFromGoogleContacts'))
     .addSeparator()
     .addItem('📑 Generate PDF Bundle & Labels', 'generatePDFBundleWithLabels')
+    .addSeparator()
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Bounces')
+      .addItem('🔎 Check for Bounces Now', 'checkForBounces')
+      .addSeparator()
+      .addItem('⏱️ Enable Auto-Check on Open', 'enableBounceAutoCheck')
+      .addItem('🚫 Disable Auto-Check on Open', 'disableBounceAutoCheck'))
     .addToUi();
 }
 
