@@ -11,8 +11,10 @@ bounce tracking, contact lookup, and personalized PDF bundles with mailing label
 4. Paste all of [`dist/Code.gs`](dist/Code.gs)
 5. Save, reload the Sheet
 
-A **📧 Email Tools** menu appears. The `People` and `email details` sheets are
-created automatically on first open.
+A **📧 Email Tools** menu appears. The `People`, `email details` and `Bounced`
+sheets are created automatically on first open, and their header rows are
+enforced every open — a renamed header gets reset, since the sheets are read by
+column position.
 
 That is the whole install. Two features quietly no-op until you enable their
 Google service under **Services +** in the Apps Script editor:

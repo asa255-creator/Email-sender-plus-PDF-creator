@@ -62,6 +62,19 @@ function validateAndCreateSheets() {
 
   // Validate or create "email details" sheet with labels
   validateEmailDetailsSheet(ss);
+
+  // Validate or create "Bounced" sheet so the tab exists before the first scan
+  getOrCreateBounceSheet(ss);
+}
+
+/**
+ * Writes the expected header into a cell when it is blank OR holds something
+ * else. The sheet is read positionally, so a renamed header is a silent
+ * mismatch rather than a harmless label change.
+ */
+function enforceHeader(sheet, column, expected) {
+  const cell = sheet.getRange(1, column);
+  if (String(cell.getValue() || '').trim() !== expected) cell.setValue(expected);
 }
 
 function validatePeopleSheet(ss) {
@@ -73,15 +86,12 @@ function validatePeopleSheet(ss) {
     sheet = ss.insertSheet(SHEET_NAME);
   }
 
-  // Check if headers exist in row 1 (columns A-E)
-  const headers = sheet.getRange(1, 1, 1, 5).getValues()[0];
-
-  // Set headers only if they're missing
-  if (!headers[0]) sheet.getRange(1, 1).setValue('Name');
-  if (!headers[1]) sheet.getRange(1, 2).setValue('PAC Names');
-  if (!headers[2]) sheet.getRange(1, 3).setValue('Email');
-  if (!headers[3]) sheet.getRange(1, 4).setValue('Phone');
-  if (!headers[4]) sheet.getRange(1, 5).setValue('Address');
+  // Enforce headers in row 1 (columns A-E)
+  enforceHeader(sheet, 1, 'Name');
+  enforceHeader(sheet, 2, 'PAC Names');
+  enforceHeader(sheet, 3, 'Email');
+  enforceHeader(sheet, 4, 'Phone');
+  enforceHeader(sheet, 5, 'Address');
 
   // Format header row
   sheet.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#f3f3f3');
@@ -103,14 +113,11 @@ function validateEmailDetailsSheet(ss) {
     sheet = ss.insertSheet(SHEET_NAME);
   }
 
-  // Check if labels exist in row 1
-  const labels = sheet.getRange(1, 1, 1, 4).getValues()[0];
-
-  // Set labels only if they're missing
-  if (!labels[0]) sheet.getRange(1, 1).setValue('Body Template');
-  if (!labels[1]) sheet.getRange(1, 2).setValue('Subject Template');
-  if (!labels[2]) sheet.getRange(1, 3).setValue('Drive URL or File ID');
-  if (!labels[3]) sheet.getRange(1, 4).setValue('CC Emails');
+  // Enforce labels in row 1
+  enforceHeader(sheet, 1, 'Body Template');
+  enforceHeader(sheet, 2, 'Subject Template');
+  enforceHeader(sheet, 3, 'Drive URL or File ID');
+  enforceHeader(sheet, 4, 'CC Emails');
 
   // Format label row
   sheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f3f3f3');
